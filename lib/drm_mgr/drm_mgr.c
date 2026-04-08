@@ -35,9 +35,7 @@ struct DRM_Mgr *drm_mgr_init() {
   return self;
 }
 
-void drm_mgr_free(struct DRM_Mgr *self) {
-  free(self);
-}
+void drm_mgr_free(struct DRM_Mgr *self) { free(self); }
 
 static int connect_daemon(const struct DRM_Mgr *self) {
   int sock = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -79,8 +77,7 @@ static int recv_fd(int sock, int *out_fd, void *data, size_t datalen) {
   }
 
   struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
-  if (!cmsg || cmsg->cmsg_level != SOL_SOCKET ||
-      cmsg->cmsg_type != SCM_RIGHTS) {
+  if (!cmsg || cmsg->cmsg_level != SOL_SOCKET || cmsg->cmsg_type != SCM_RIGHTS) {
     fprintf(stderr, "no fd received (lease rejected?)\n");
     return -1;
   }
@@ -120,8 +117,7 @@ void *drm_mgr_acquire_fb(struct DRM_Mgr *self, struct fb_info *info) {
   }
   close(sock);
 
-  void *fb = mmap(NULL, info->size, PROT_READ | PROT_WRITE, MAP_SHARED,
-                  dmabuf_fd, 0);
+  void *fb = mmap(NULL, info->size, PROT_READ | PROT_WRITE, MAP_SHARED, dmabuf_fd, 0);
   if (fb == MAP_FAILED) {
     perror("mmap");
     close(dmabuf_fd);

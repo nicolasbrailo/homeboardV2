@@ -1,4 +1,4 @@
-SUBDIRS := $(filter-out rpiz-xcompile, $(patsubst %/,%,$(wildcard */)))
+SUBDIRS := $(filter-out rpiz-xcompile stockimgs lib, $(patsubst %/,%,$(wildcard */)))
 
 .PHONY: all clean $(SUBDIRS)
 
@@ -12,3 +12,7 @@ clean:
 
 deploy:
 	@for dir in $(SUBDIRS); do $(MAKE) -C $$dir deploy; done
+
+deploy-stock-imgs:
+	scp -r ./stockimgs 10.0.0.114:/home/batman
+

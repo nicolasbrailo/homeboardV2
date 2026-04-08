@@ -1,5 +1,7 @@
 BIN_NAME = drm-render-test
-SRCS = main.c drm_mgr.c
+SRCS = main.c ../lib/drm_mgr/drm_mgr.c
+
+CFLAGS += -I../lib/drm_mgr
 
 ALL: $(BIN_NAME)
 

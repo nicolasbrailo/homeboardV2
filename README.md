@@ -37,7 +37,7 @@ ssh-copy-id batman@$IP
 
 # Project build
 
-- Setup deps: `sudo apt-get install build-essential clang gcc-arm-linux-gnueabi gcc-arm-linux-gnueabihf`
+- Setup deps: `sudo apt-get install build-essential clang clang-format gcc-arm-linux-gnueabi gcc-arm-linux-gnueabihf`
 - Build test project: `cd xcompile-test && make && file build/xcompile-test`
 - `make deploy`
 

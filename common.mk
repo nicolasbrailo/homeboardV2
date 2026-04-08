@@ -1,4 +1,4 @@
-.PHONY: clean xcompile-start xcompile-end
+.PHONY: clean xcompile-start xcompile-end format
 
 DEPLOY_TGT_HOST=batman@10.0.0.114
 DEPLOY_TGT_DIR=/home/batman/
@@ -43,6 +43,12 @@ xcompile-end:
 clean:
 	rm -rf build
 
+format:
+	clang-format -i $(SRCS) $(wildcard *.h)
+
+OBJS = $(patsubst %.c,build/%.o,$(notdir $(SRCS)))
+VPATH = $(sort $(dir $(SRCS)))
+
 build/%.o: %.c
 	mkdir -p build
 	@if [ ! -d ~/src/xcomp-rpiz-env/mnt/lib/raspberrypi-sys-mods ]; then \
@@ -53,7 +59,7 @@ build/%.o: %.c
 
 .phony: $(BIN_NAME)
 $(BIN_NAME):build/$(BIN_NAME)
-build/$(BIN_NAME): $(patsubst %.c,build/%.o,$(SRCS))
+build/$(BIN_NAME): $(OBJS)
 	clang $(CFLAGS) $^ $(LDFLAGS) -o $@
 
 deploy: build/$(BIN_NAME)
