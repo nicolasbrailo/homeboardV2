@@ -1,8 +1,8 @@
 #define _GNU_SOURCE
 #include <fcntl.h>
 #include <signal.h>
-#include <stdio.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -22,7 +22,7 @@ static void sig_handler(int sig) {
   g_quit = 1;
 }
 
-static void handle_client(struct DRM_state* drm, int client_sock, const char *cmd) {
+static void handle_client(struct DRM_state *drm, int client_sock, const char *cmd) {
   if (strcmp(cmd, "on") == 0) {
     if (!g_display_on) {
       drm_display_on(drm);
@@ -42,7 +42,7 @@ static void handle_client(struct DRM_state* drm, int client_sock, const char *cm
     send(client_sock, "ok\n", 3, 0);
 
   } else if (strcmp(cmd, "status") == 0) {
-    const char *state = g_display_on? "on\n" : "off\n";
+    const char *state = g_display_on ? "on\n" : "off\n";
     send(client_sock, state, strlen(state), 0);
 
   } else if (strcmp(cmd, "get_drm_fd") == 0) {
@@ -86,7 +86,7 @@ int main(int argc, char *argv[]) {
   if (sock_init() < 0)
     return 1;
 
-  struct DRM_state* drm = drm_init();
+  struct DRM_state *drm = drm_init();
   if (!drm)
     return 1;
   if (drm_create_framebuffer(drm) < 0)

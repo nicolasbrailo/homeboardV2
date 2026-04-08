@@ -60,10 +60,7 @@ void sock_free() {
 }
 
 int sock_poll(char *cmd, size_t cmdlen) {
-  struct pollfd fds = {
-    .fd = g_listen_sock,
-    .events = POLLIN
-  };
+  struct pollfd fds = {.fd = g_listen_sock, .events = POLLIN};
 
   int pr = poll(&fds, 1, 1000);
   if (pr < 0) {

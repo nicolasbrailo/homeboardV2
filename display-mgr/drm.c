@@ -29,7 +29,8 @@ struct DRM_state {
 };
 
 void drm_free(struct DRM_state *s) {
-  if (!s) return;
+  if (!s)
+    return;
 
   for (size_t i = 0; i < s->num_outputs; i++) {
     if (s->outputs[i].saved_crtc)
@@ -55,7 +56,8 @@ void drm_free(struct DRM_state *s) {
 
 struct DRM_state *drm_init(void) {
   struct DRM_state *s = calloc(1, sizeof(struct DRM_state));
-  if (!s) return NULL;
+  if (!s)
+    return NULL;
 
   s->fd = -1;
   s->dmabuf_fd = -1;
@@ -127,8 +129,7 @@ struct DRM_state *drm_init(void) {
 
 void drm_display_off(struct DRM_state *s) {
   for (size_t i = 0; i < s->num_outputs; i++) {
-    if (drmModeSetCrtc(s->fd, s->outputs[i].crtc_id, 0, 0, 0,
-                       NULL, 0, NULL) < 0)
+    if (drmModeSetCrtc(s->fd, s->outputs[i].crtc_id, 0, 0, 0, NULL, 0, NULL) < 0)
       perror("Failed to turn display off: drmModeSetCrtc (disable)");
   }
 }
@@ -138,8 +139,7 @@ void drm_display_on(struct DRM_state *s) {
     drmModeCrtc *c = s->outputs[i].saved_crtc;
     if (!c || !c->mode_valid)
       continue;
-    if (drmModeSetCrtc(s->fd, s->outputs[i].crtc_id, s->fb_id, 0, 0,
-                       &s->outputs[i].conn_id, 1, &c->mode) < 0)
+    if (drmModeSetCrtc(s->fd, s->outputs[i].crtc_id, s->fb_id, 0, 0, &s->outputs[i].conn_id, 1, &c->mode) < 0)
       perror("Failed to turn display on: drmModeSetCrtc (enable)");
   }
 }
@@ -147,10 +147,12 @@ void drm_display_on(struct DRM_state *s) {
 bool drm_is_display_on(const struct DRM_state *s) {
   for (size_t i = 0; i < s->num_outputs; i++) {
     drmModeCrtc *crtc = drmModeGetCrtc(s->fd, s->outputs[i].crtc_id);
-    if (!crtc) continue;
+    if (!crtc)
+      continue;
     bool active = (crtc->buffer_id != 0);
     drmModeFreeCrtc(crtc);
-    if (active) return true;
+    if (active)
+      return true;
   }
   return false;
 }
@@ -177,15 +179,13 @@ int drm_create_framebuffer(struct DRM_state *s) {
 
   s->fb_handle = create.handle;
 
-  if (drmModeAddFB(s->fd, width, height, 24, 32, create.pitch,
-                   s->fb_handle, &s->fb_id) < 0) {
+  if (drmModeAddFB(s->fd, width, height, 24, 32, create.pitch, s->fb_handle, &s->fb_id) < 0) {
     perror("drmModeAddFB");
     return -1;
   }
 
   int dmabuf_fd = -1;
-  if (drmPrimeHandleToFD(s->fd, s->fb_handle, DRM_CLOEXEC | DRM_RDWR,
-                         &dmabuf_fd) < 0) {
+  if (drmPrimeHandleToFD(s->fd, s->fb_handle, DRM_CLOEXEC | DRM_RDWR, &dmabuf_fd) < 0) {
     perror("drmPrimeHandleToFD");
     return -1;
   }
@@ -197,30 +197,22 @@ int drm_create_framebuffer(struct DRM_state *s) {
   s->fb_info.format = DRM_FORMAT_XRGB8888;
   s->fb_info.size = (uint32_t)create.size;
 
-  fprintf(stderr, "framebuffer: %ux%u stride=%u size=%u\n", width, height,
-          s->fb_info.stride, s->fb_info.size);
+  fprintf(stderr, "framebuffer: %ux%u stride=%u size=%u\n", width, height, s->fb_info.stride, s->fb_info.size);
 
   // Set this framebuffer on all CRTCs
   for (size_t i = 0; i < s->num_outputs; i++) {
     drmModeCrtc *c = s->outputs[i].saved_crtc;
     if (!c || !c->mode_valid)
       continue;
-    if (drmModeSetCrtc(s->fd, s->outputs[i].crtc_id, s->fb_id, 0, 0,
-                       &s->outputs[i].conn_id, 1, &c->mode) < 0)
+    if (drmModeSetCrtc(s->fd, s->outputs[i].crtc_id, s->fb_id, 0, 0, &s->outputs[i].conn_id, 1, &c->mode) < 0)
       perror("drmModeSetCrtc (set fb)");
   }
 
   return 0;
 }
 
-const struct fb_info *drm_get_fb_info(const struct DRM_state *s) {
-  return &s->fb_info;
-}
+const struct fb_info *drm_get_fb_info(const struct DRM_state *s) { return &s->fb_info; }
 
-int drm_get_dmabuf_fd(const struct DRM_state *s) {
-  return s->dmabuf_fd;
-}
+int drm_get_dmabuf_fd(const struct DRM_state *s) { return s->dmabuf_fd; }
 
-size_t drm_get_num_outputs(const struct DRM_state *s) {
-  return s->num_outputs;
-}
+size_t drm_get_num_outputs(const struct DRM_state *s) { return s->num_outputs; }

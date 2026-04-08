@@ -19,9 +19,7 @@ int run_state_init() {
   return 0;
 }
 
-void run_state_free() {
-  unlink(g_state_path);
-}
+void run_state_free() { unlink(g_state_path); }
 
 void run_state_write(const char *state) {
   int fd = open(g_state_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
@@ -32,4 +30,3 @@ void run_state_write(const char *state) {
   write(fd, "\n", 1);
   close(fd);
 }
-

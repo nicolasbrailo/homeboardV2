@@ -50,4 +50,3 @@ pid_t drm_lease_get_active() {
   drm_lease_is_alive();
   return g_lease_pid;
 }
-
