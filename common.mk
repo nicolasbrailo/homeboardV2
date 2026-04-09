@@ -57,7 +57,7 @@ build/%.o: %.c
 	fi ;
 	clang $(CFLAGS) $< -c -o $@
 
-.phony: $(BIN_NAME)
+.PHONY: $(BIN_NAME)
 $(BIN_NAME):build/$(BIN_NAME)
 build/$(BIN_NAME): $(OBJS)
 	clang $(CFLAGS) $^ $(LDFLAGS) -o $@
