@@ -3,7 +3,6 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <signal.h>
-#include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -16,22 +15,24 @@
 #define GPIO_PATH "/dev/gpiomem"
 #define GPIO_MEM_SZ 4096
 #define GPIO_INPUTS 13
+#define COL_NOO "\x1B[0m"
+#define COL_RED "\x1B[31m"
 
 typedef unsigned int gpio_reg_t;
 
 // https://www.cs.uaf.edu/2016/fall/cs301/lecture/11_09_raspberry_pi.html
 
-atomic_bool gUsrStop = false;
+volatile sig_atomic_t gUsrStop = 0;
 void sighandler(int unused) {
     (void) unused;
-    gUsrStop = true;
+    gUsrStop = 1;
 }
 
 int main(int argc, char **argv) {
   bool update_in_place = false;
   bool log_change = false;
   long monitor_pin = -1;
-  for (int i = 0; i < argc; ++i) {
+  for (int i = 1; i < argc; ++i) {
     if ((strcmp(argv[i], "--update_in_place") == 0) ||
         (strcmp(argv[i], "-u") == 0)) {
       update_in_place = true;
@@ -55,7 +56,7 @@ int main(int argc, char **argv) {
     while (*s && isdigit(*s++));
     const bool is_num = *s == '\0';
     long pin_arg = strtol(argv[i], NULL, 10);
-    if (is_num && pin_arg >= 0 && (size_t)pin_arg <= GPIO_PINS) {
+    if (is_num && pin_arg >= 0 && (size_t)pin_arg < GPIO_PINS) {
       monitor_pin = pin_arg;
     }
   }
@@ -67,8 +68,8 @@ int main(int argc, char **argv) {
   }
 
   gpio_reg_t *gpio_mem =
-      mmap(NULL, GPIO_MEM_SZ, PROT_READ + PROT_WRITE, MAP_SHARED, gpio_fd, 0);
-  if (!gpio_mem) {
+      mmap(NULL, GPIO_MEM_SZ, PROT_READ | PROT_WRITE, MAP_SHARED, gpio_fd, 0);
+  if (gpio_mem == MAP_FAILED) {
     perror("Error mmap GPIO");
     close(gpio_fd);
     return 1;
@@ -85,8 +86,6 @@ int main(int argc, char **argv) {
   gpio_reg_t prev_gpio = 0;
   size_t print_cnt = 0;
   while (!gUsrStop) {
-#define COL_NOO "\x1B[0m"
-#define COL_RED "\x1B[31m"
     printf("%s%03zu", COL_NOO, print_cnt++);
     gpio_reg_t gpio_ins = gpio_mem[GPIO_INPUTS];
 
@@ -100,8 +99,8 @@ int main(int argc, char **argv) {
 
     bool change_detected = false;
     for (size_t i = pin_start; i < pin_end; ++i) {
-      bool bit = (gpio_ins & (1 << i)) != 0;
-      bool prev_bit = (prev_gpio & (1 << i)) != 0;
+      bool bit = (gpio_ins & (1U << i)) != 0;
+      bool prev_bit = (prev_gpio & (1U << i)) != 0;
       if (bit != prev_bit) {
         printf("%s >%u<", COL_RED, bit);
         change_detected = true;
@@ -122,8 +121,6 @@ int main(int argc, char **argv) {
 
     prev_gpio = gpio_ins;
     sleep(1);
-#undef COL_NOO
-#undef COL_RED
   }
 
   if (munmap(gpio_mem, GPIO_MEM_SZ) != 0) {
