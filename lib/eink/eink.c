@@ -37,13 +37,17 @@ struct EInkDisplay {
 
 #define EPD_2in13_V4_WIDTH 122
 #define EPD_2in13_V4_HEIGHT 250
-#define EPD_RST_PIN 17
 #define EPD_DC_PIN 25
 #define EPD_CS_PIN 8
 #define EPD_SCLK_PIN 11
 #define EPD_MOSI_PIN 10
 #define EPD_PWR_PIN 18
 #define EPD_BUSY_PIN 24
+
+// On the manual (https://www.waveshare.com/wiki/2.13inch_e-Paper_HAT_Manual), this is connected
+// to GPIO 17, but 9 is nicer (all of the pins are bunched together)
+// #define EPD_RST_PIN 17
+#define EPD_RST_PIN 9
 
 static void sleep_ms(size_t xms) {
   struct timespec ts, rem;
@@ -244,7 +248,8 @@ struct EInkDisplay *eink_init(struct EInkConfig *cfg) {
     }
   } else {
     if (access("/dev/spidev0.0", F_OK) != 0) {
-      fprintf(stderr, "SPI is not enabled. Run 'dtparam spi=on' to enable it, make it persistent with 'raspi-config nonint do_spi 0'.\n");
+      fprintf(stderr, "SPI is not enabled. Run 'dtparam spi=on' to enable it, make it persistent with 'raspi-config "
+                      "nonint do_spi 0'.\n");
       goto err;
     }
 

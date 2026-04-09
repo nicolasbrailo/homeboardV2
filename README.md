@@ -43,3 +43,10 @@ ssh-copy-id batman@$IP
 
 This should verify the full dev cycle works (cross compile, deploy to target). Try running the binary on the target, too.
 
+
+
+# TODO
+
+* Make the eink pins runtime config?
+* eink, verify why partial update isn't working
+
