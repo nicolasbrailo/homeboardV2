@@ -28,4 +28,7 @@ enable-spi:
 	ssh $(DEPLOY_TGT_HOST) sudo raspi-config nonint do_spi 0
 	ssh $(DEPLOY_TGT_HOST) sudo dtparam spi=on
 
+enable-user-gpio:
+	ssh $(DEPLOY_TGT_HOST) sudo usermod -aG gpio,spi '$$USER'
+
 
