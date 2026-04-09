@@ -1,7 +1,6 @@
 BIN_NAME = display-mgr
 SRCS = main.c drm.c drm_lease.c sock.c run_state.c
-
-LDFLAGS += -ldrm
+LDFLAGS += -static -ldrm
 
 all: $(BIN_NAME)
 

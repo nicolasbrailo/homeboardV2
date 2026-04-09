@@ -1,6 +1,8 @@
 BIN_NAME = eink-write
 CFLAGS += -I../lib/
-LDFLAGS += -Wl,--gc-sections -lm -lcairo -lpixman-1 -lfontconfig -lfreetype -lpng -lz -lexpat -lbz2 -lbrotlidec -lpthread
+LDFLAGS += -Wl,--gc-sections \
+	-Wl,-Bstatic -lcairo -lfontconfig -lfreetype -lpng -lz -lexpat -lbz2 -lbrotlidec -lbrotlicommon \
+	-Wl,-Bdynamic -lpixman-1 -lm -lpthread
 
 SRCS = \
 		../lib/eink/rpigpio.c \
