@@ -5,7 +5,7 @@ LDFLAGS += -Wl,--gc-sections \
 	-Wl,-Bdynamic -lpixman-1 -lm -lpthread
 
 SRCS = \
-		../lib/eink/rpigpio.c \
+		../lib/rpigpio/rpigpio.c \
 		../lib/eink/eink.c \
 		../lib/eink/cairo_helpers.c \
 		main.c

@@ -5,7 +5,7 @@
 
 #include "cairo_helpers.h"
 #include "eink.h"
-#include "rpigpio.h"
+#include "rpigpio/rpigpio.h"
 
 #include <stdbool.h>
 #include <stdio.h>

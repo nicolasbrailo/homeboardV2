@@ -27,6 +27,5 @@ Set `EInkConfig.mock_display = true` to skip hardware access (useful for testing
 ## Files
 
 - `eink.h` / `eink.c` - display driver and public API
-- `rpigpio.h` / `rpigpio.c` - minimal GPIO v2 and SPI wrappers
 - `cairo_helpers.h` / `cairo_helpers.c` - word-wrapping text layout for Cairo
 
