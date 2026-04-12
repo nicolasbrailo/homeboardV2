@@ -78,7 +78,6 @@ static const uint16_t COMMON_PARAM_WORDS[] = {0x05, 0x0A, 0x06, 0x02, 0x0C, 0x0B
 
 struct LD2410S {
   struct session *session;
-
   atomic_size_t last_vacancy_count;
   ld2410s_report_cb report_cb;
   void *report_ctx;
@@ -150,6 +149,7 @@ struct LD2410S *ld2410s_init(const char *dev_path, bool debug, ld2410s_report_cb
   if (!s)
     return NULL;
 
+  atomic_init(&s->last_vacancy_count, 0);
   s->report_cb = report_cb;
   s->report_ctx = report_user_data;
   s->cal_cb = cal_cb;

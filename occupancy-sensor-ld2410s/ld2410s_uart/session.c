@@ -15,6 +15,7 @@
 
 struct session {
   struct transport *transport;
+  bool debug;
 
   /* Serializes callers (one transaction at a time) */
   pthread_mutex_t cmd_mutex;
@@ -37,6 +38,9 @@ static void on_cmd_response(void *ctx, uint16_t resp_cmd, uint16_t status, const
 
   if (status != 0)
     fprintf(stderr, "[CMD] error: resp=0x%04x status=0x%04x\n", resp_cmd, status);
+
+  if (s->debug)
+    printf("LD2410S UART session: received response 0x%04X\n", resp_cmd);
 
   pthread_mutex_lock(&s->resp_mutex);
   s->resp_cmd = resp_cmd;
@@ -63,6 +67,8 @@ static int send_and_wait(struct session *s, uint16_t cmd_word, const void *data,
   s->resp_pending = false;
   pthread_mutex_unlock(&s->resp_mutex);
 
+  if (s->debug)
+    printf("LD2410S UART Session: queing command 0x%04X\n", cmd_word);
   if (!transport_enqueue(s->transport, cmd_word, data, data_len)) {
     fprintf(stderr, "Err: command queue full\n");
     return -1;
@@ -105,6 +111,7 @@ struct session *session_init(const char *dev_path, bool debug, session_frame_cb 
   if (!s)
     return NULL;
 
+  s->debug = debug;
   s->transport = transport_init(dev_path, debug, on_cmd_response, s, report_cb, report_ctx, cal_cb, cal_ctx);
   if (!s->transport) {
     free(s);
@@ -114,6 +121,8 @@ struct session *session_init(const char *dev_path, bool debug, session_frame_cb 
   pthread_mutex_init(&s->cmd_mutex, NULL);
   pthread_mutex_init(&s->resp_mutex, NULL);
   pthread_cond_init(&s->resp_cond, NULL);
+  if (s->debug)
+    printf("Started LD2410S UART session manager\n");
   return s;
 }
 
@@ -125,6 +134,8 @@ void session_free(struct session *s) {
   pthread_mutex_destroy(&s->resp_mutex);
   pthread_cond_destroy(&s->resp_cond);
   free(s);
+  if (s->debug)
+    printf("Shutdown LD2410S UART session manager\n");
 }
 
 int session_start(struct session *s) { return transport_start(s->transport); }
@@ -133,12 +144,20 @@ int session_cmd(struct session *s, uint16_t cmd_word, const void *in, size_t in_
                 size_t *out_len) {
   pthread_mutex_lock(&s->cmd_mutex);
 
+  if (s->debug)
+    printf("LD2410S UART Session: config enable\n");
   uint8_t enable_data[2] = {0x01, 0x00};
   int ret = send_and_wait(s, CMD_ENABLE_CONFIG, enable_data, sizeof(enable_data), NULL, 0, NULL);
-  if (ret == 0)
+
+  if (ret == 0) {
+    if (s->debug)
+      printf("LD2410S UART Session: TX command 0x%04X\n", cmd_word);
     ret = send_and_wait(s, cmd_word, in, in_len, out_buf, out_cap, out_len);
+  }
 
   /* Always try to close config mode, even on failure. */
+  if (s->debug)
+    printf("LD2410S UART Session: config disable\n");
   send_and_wait(s, CMD_END_CONFIG, NULL, 0, NULL, 0, NULL);
 
   pthread_mutex_unlock(&s->cmd_mutex);

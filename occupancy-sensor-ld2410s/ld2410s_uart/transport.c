@@ -214,8 +214,11 @@ static void handle_cmd_response(struct transport *f, const uint8_t *frame, size_
   const uint8_t *data = payload + 4;
   size_t data_len = actual_payload - 4;
 
-  if (f->on_cmd_response)
+  if (f->on_cmd_response) {
+    if (f->debug)
+      printf("LD2410S UART transport: invoke on_cmd_response\n");
     f->on_cmd_response(f->cmd_response_ctx, resp_cmd, status, data, data_len);
+  }
 }
 
 enum parse_result {
@@ -289,6 +292,8 @@ static void *reader_thread_fn(void *arg) {
     if (!waiting_for_response) {
       struct transport_cmd cmd;
       if (spsc_dequeue(f, &cmd)) {
+        if (f->debug)
+          printf("LD2410S UART transport: dequed command 0x%04X\n", cmd.cmd_word);
         send_cmd(f, cmd.cmd_word, cmd.data, cmd.data_len);
         waiting_for_response = true;
         response_timeout = monotonic_now() + CMD_TIMEOUT_SEC;
@@ -314,6 +319,8 @@ static void *reader_thread_fn(void *arg) {
     }
 
     if (r != PARSE_NONE) {
+      if (f->debug)
+        printf("LD2410S UART transport: discovered response %d\n", r);
       buf_len = 0;
     }
 

@@ -1,6 +1,10 @@
 {
+  "enable_uart": true,
   "device": "/dev/ttyAMA0",
   "debug": false,
+
+  "COMMENT_sensor_report_gpio": "Pin used by the sensor. Use -1 to disable GPIO monitoring.",
+  "sensor_report_gpio": 2,
 
   "COMMENT_farthest_gate": "gate index 0-15; each gate ~0.7 m range bin",
   "farthest_gate": 6,
