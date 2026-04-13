@@ -122,6 +122,7 @@ static int apply_sensor_params(struct LD2410S *s, const struct config *cfg, cons
       {"response_speed",     &current.response_speed},
   };
 
+  printf("Verifying device config:\n");
   for (size_t i = 0; i < sizeof(params) / sizeof(params[0]); i++) {
     struct json_object *val;
     if (!json_object_object_get_ex(root, params[i].key, &val))
@@ -176,6 +177,7 @@ int main(int argc, char *argv[]) {
   }
 
   int last_cal_yday = -1;
+  printf("Service is now running\n");
   while (!g_quit) {
     time_t now = time(NULL);
     struct tm tm;

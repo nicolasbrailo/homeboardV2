@@ -79,6 +79,7 @@ static const uint16_t COMMON_PARAM_WORDS[] = {0x05, 0x0A, 0x06, 0x02, 0x0C, 0x0B
 struct LD2410S_uart {
   struct session *session;
   atomic_size_t last_vacancy_count;
+  bool debug;
   ld2410s_report_cb report_cb;
   void *report_ctx;
   ld2410s_calibration_cb cal_cb;
@@ -150,6 +151,7 @@ struct LD2410S_uart *ld2410s_uart_init(const char *dev_path, bool debug, ld2410s
     return NULL;
 
   atomic_init(&s->last_vacancy_count, 0);
+  s->debug = debug;
   s->report_cb = report_cb;
   s->report_ctx = report_user_data;
   s->cal_cb = cal_cb;
@@ -175,10 +177,15 @@ int ld2410s_uart_start(struct LD2410S_uart *s) { return session_start(s->session
 /* --- Public API: Getters --- */
 
 int ld2410s_uart_get_firmware(struct LD2410S_uart *s, uint8_t *out, size_t out_len, size_t *actual_len) {
+  if (s->debug)
+    printf("Retrieving device firmware...\n");
   return session_cmd(s->session, CMD_READ_FIRMWARE, NULL, 0, out, out_len, actual_len);
 }
 
 int ld2410s_uart_get_serial(struct LD2410S_uart *s, char *out, size_t out_len) {
+  if (s->debug)
+    printf("Retrieving device serial number...\n");
+
   uint8_t buf[TRANSPORT_MAX_DATA];
   size_t n = 0;
   if (session_cmd(s->session, CMD_READ_SERIAL, NULL, 0, buf, sizeof(buf), &n) < 0)
@@ -206,6 +213,9 @@ int ld2410s_uart_get_serial(struct LD2410S_uart *s, char *out, size_t out_len) {
 }
 
 int ld2410s_uart_get_common_params(struct LD2410S_uart *s, struct LD2410S_common_params *out) {
+  if (s->debug)
+    printf("Retrieving device common params...\n");
+
   uint8_t payload[NUM_COMMON_PARAMS * 2];
   for (int i = 0; i < NUM_COMMON_PARAMS; i++)
     write_u16_le(payload + i * 2, COMMON_PARAM_WORDS[i]);
@@ -230,6 +240,9 @@ int ld2410s_uart_get_common_params(struct LD2410S_uart *s, struct LD2410S_common
 }
 
 int ld2410s_uart_get_threshold(struct LD2410S_uart *s, struct LD2410S_threshold_params *out) {
+  if (s->debug)
+    printf("Retrieving device config thresholds...\n");
+
   uint8_t payload[16 * 2];
   for (int i = 0; i < 16; i++)
     write_u16_le(payload + i * 2, (uint16_t)i);
@@ -252,6 +265,9 @@ int ld2410s_uart_get_threshold(struct LD2410S_uart *s, struct LD2410S_threshold_
 }
 
 int ld2410s_uart_get_snr(struct LD2410S_uart *s, struct LD2410S_snr_params *out) {
+  if (s->debug)
+    printf("Retrieving device config snr's...\n");
+
   uint8_t payload[16 * 2];
   for (int i = 0; i < 16; i++)
     write_u16_le(payload + i * 2, (uint16_t)i);
@@ -276,6 +292,9 @@ int ld2410s_uart_get_snr(struct LD2410S_uart *s, struct LD2410S_snr_params *out)
 /* --- Public API: Setters --- */
 
 int ld2410s_uart_set_serial(struct LD2410S_uart *s, const char *serial) {
+  if (s->debug)
+    printf("Set device serial number to '%s'...\n", serial);
+
   uint8_t payload[2 + 8];
   write_u16_le(payload, 8);
   memset(payload + 2, 0, 8);
@@ -288,6 +307,9 @@ int ld2410s_uart_set_serial(struct LD2410S_uart *s, const char *serial) {
 }
 
 int ld2410s_uart_set_param(struct LD2410S_uart *s, const char *name, uint32_t value) {
+  if (s->debug)
+    printf("Set device config %s=%d...\n", name, value);
+
   for (const struct param_entry *p = PARAM_TABLE; p->name; p++) {
     if (strcmp(p->name, name) == 0) {
       uint8_t payload[6];

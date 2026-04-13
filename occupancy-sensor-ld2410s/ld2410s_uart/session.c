@@ -80,6 +80,8 @@ static int send_and_wait(struct session *s, uint16_t cmd_word, const void *data,
 
   pthread_mutex_lock(&s->resp_mutex);
   for (;;) {
+    if (s->debug)
+      printf("LD2410S UART Session: waiting for response to 0x%04X...\n", cmd_word);
     while (!s->resp_pending) {
       if (pthread_cond_timedwait(&s->resp_cond, &s->resp_mutex, &deadline) == ETIMEDOUT) {
         pthread_mutex_unlock(&s->resp_mutex);
@@ -88,9 +90,13 @@ static int send_and_wait(struct session *s, uint16_t cmd_word, const void *data,
       }
     }
     s->resp_pending = false;
-    if (s->resp_cmd == expected)
-      break;
-    fprintf(stderr, "[CMD] discarding stray resp=0x%04x (waiting for 0x%04x)\n", s->resp_cmd, expected);
+    if (s->resp_cmd == expected) {
+      if (s->debug)
+        printf("LD2410S UART Session: received response to 0x%04X...\n", cmd_word);
+    } else {
+      fprintf(stderr, "LD2410S UART Session: expected response=0x%04x, received=0x%04X...\n", expected, s->resp_cmd);
+    }
+    break;
   }
   if (out_buf && out_cap) {
     size_t copy = s->resp_len < out_cap ? s->resp_len : out_cap;
