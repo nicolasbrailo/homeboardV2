@@ -151,7 +151,7 @@ int session_cmd(struct session *s, uint16_t cmd_word, const void *in, size_t in_
 
   if (ret == 0) {
     if (s->debug)
-      printf("LD2410S UART Session: TX command 0x%04X\n", cmd_word);
+      printf("LD2410S UART Session: sending command 0x%04X\n", cmd_word);
     ret = send_and_wait(s, cmd_word, in, in_len, out_buf, out_cap, out_len);
   }
 

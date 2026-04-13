@@ -1,5 +1,5 @@
 {
-  "enable_uart": true,
+  "enable_uart": false,
   "device": "/dev/ttyAMA0",
   "debug": false,
 

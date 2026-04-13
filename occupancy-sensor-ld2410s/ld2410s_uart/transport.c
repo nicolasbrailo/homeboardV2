@@ -346,6 +346,8 @@ struct transport *transport_init(const char *dev_path, bool debug, transport_cmd
     free(f);
     return NULL;
   }
+  if (debug)
+    printf("Connected to UART port\n");
 
   atomic_init(&f->queue_head, 0);
   atomic_init(&f->queue_tail, 0);

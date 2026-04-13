@@ -1,4 +1,4 @@
-#include "ld2410s.h"
+#include "ld2410s_uart.h"
 #include "session.h"
 #include "transport.h"
 
@@ -76,7 +76,7 @@ static const uint16_t COMMON_PARAM_WORDS[] = {0x05, 0x0A, 0x06, 0x02, 0x0C, 0x0B
 
 /* --- Internal state --- */
 
-struct LD2410S {
+struct LD2410S_uart {
   struct session *session;
   atomic_size_t last_vacancy_count;
   ld2410s_report_cb report_cb;
@@ -108,7 +108,7 @@ static void write_u32_le(uint8_t *p, uint32_t v) {
 /* --- Report/calibration decoders (reader thread) --- */
 
 static void decode_report(void *ctx, const uint8_t *frame, size_t len) {
-  struct LD2410S *s = ctx;
+  struct LD2410S_uart *s = ctx;
   if (len < 5 || !s->report_cb)
     return;
 
@@ -126,7 +126,7 @@ static void decode_report(void *ctx, const uint8_t *frame, size_t len) {
 }
 
 static void decode_calibration(void *ctx, const uint8_t *frame, size_t len) {
-  struct LD2410S *s = ctx;
+  struct LD2410S_uart *s = ctx;
 
   /* frame: [header 4] [payload_len 2] [payload...] [footer 4] */
   if (len < 4 + 2 + 3 + 4 || !s->cal_cb)
@@ -143,9 +143,9 @@ static void decode_calibration(void *ctx, const uint8_t *frame, size_t len) {
 
 /* --- Public API: Lifecycle --- */
 
-struct LD2410S *ld2410s_init(const char *dev_path, bool debug, ld2410s_report_cb report_cb, void *report_user_data,
+struct LD2410S_uart *ld2410s_uart_init(const char *dev_path, bool debug, ld2410s_report_cb report_cb, void *report_user_data,
                              ld2410s_calibration_cb cal_cb, void *cal_user_data) {
-  struct LD2410S *s = calloc(1, sizeof(*s));
+  struct LD2410S_uart *s = calloc(1, sizeof(*s));
   if (!s)
     return NULL;
 
@@ -163,22 +163,22 @@ struct LD2410S *ld2410s_init(const char *dev_path, bool debug, ld2410s_report_cb
   return s;
 }
 
-void ld2410s_free(struct LD2410S *s) {
+void ld2410s_uart_free(struct LD2410S_uart *s) {
   if (!s)
     return;
   session_free(s->session);
   free(s);
 }
 
-int ld2410s_start(struct LD2410S *s) { return session_start(s->session); }
+int ld2410s_uart_start(struct LD2410S_uart *s) { return session_start(s->session); }
 
 /* --- Public API: Getters --- */
 
-int ld2410s_get_firmware(struct LD2410S *s, uint8_t *out, size_t out_len, size_t *actual_len) {
+int ld2410s_uart_get_firmware(struct LD2410S_uart *s, uint8_t *out, size_t out_len, size_t *actual_len) {
   return session_cmd(s->session, CMD_READ_FIRMWARE, NULL, 0, out, out_len, actual_len);
 }
 
-int ld2410s_get_serial(struct LD2410S *s, char *out, size_t out_len) {
+int ld2410s_uart_get_serial(struct LD2410S_uart *s, char *out, size_t out_len) {
   uint8_t buf[TRANSPORT_MAX_DATA];
   size_t n = 0;
   if (session_cmd(s->session, CMD_READ_SERIAL, NULL, 0, buf, sizeof(buf), &n) < 0)
@@ -205,7 +205,7 @@ int ld2410s_get_serial(struct LD2410S *s, char *out, size_t out_len) {
   return 0;
 }
 
-int ld2410s_get_common_params(struct LD2410S *s, struct LD2410S_common_params *out) {
+int ld2410s_uart_get_common_params(struct LD2410S_uart *s, struct LD2410S_common_params *out) {
   uint8_t payload[NUM_COMMON_PARAMS * 2];
   for (int i = 0; i < NUM_COMMON_PARAMS; i++)
     write_u16_le(payload + i * 2, COMMON_PARAM_WORDS[i]);
@@ -229,7 +229,7 @@ int ld2410s_get_common_params(struct LD2410S *s, struct LD2410S_common_params *o
   return 0;
 }
 
-int ld2410s_get_threshold(struct LD2410S *s, struct LD2410S_threshold_params *out) {
+int ld2410s_uart_get_threshold(struct LD2410S_uart *s, struct LD2410S_threshold_params *out) {
   uint8_t payload[16 * 2];
   for (int i = 0; i < 16; i++)
     write_u16_le(payload + i * 2, (uint16_t)i);
@@ -251,7 +251,7 @@ int ld2410s_get_threshold(struct LD2410S *s, struct LD2410S_threshold_params *ou
   return 0;
 }
 
-int ld2410s_get_snr(struct LD2410S *s, struct LD2410S_snr_params *out) {
+int ld2410s_uart_get_snr(struct LD2410S_uart *s, struct LD2410S_snr_params *out) {
   uint8_t payload[16 * 2];
   for (int i = 0; i < 16; i++)
     write_u16_le(payload + i * 2, (uint16_t)i);
@@ -275,7 +275,7 @@ int ld2410s_get_snr(struct LD2410S *s, struct LD2410S_snr_params *out) {
 
 /* --- Public API: Setters --- */
 
-int ld2410s_set_serial(struct LD2410S *s, const char *serial) {
+int ld2410s_uart_set_serial(struct LD2410S_uart *s, const char *serial) {
   uint8_t payload[2 + 8];
   write_u16_le(payload, 8);
   memset(payload + 2, 0, 8);
@@ -287,7 +287,7 @@ int ld2410s_set_serial(struct LD2410S *s, const char *serial) {
   return session_cmd(s->session, CMD_WRITE_SERIAL, payload, sizeof(payload), NULL, 0, NULL);
 }
 
-int ld2410s_set_param(struct LD2410S *s, const char *name, uint32_t value) {
+int ld2410s_uart_set_param(struct LD2410S_uart *s, const char *name, uint32_t value) {
   for (const struct param_entry *p = PARAM_TABLE; p->name; p++) {
     if (strcmp(p->name, name) == 0) {
       uint8_t payload[6];
@@ -302,7 +302,7 @@ int ld2410s_set_param(struct LD2410S *s, const char *name, uint32_t value) {
 
 /* --- Public API: Calibration --- */
 
-int ld2410s_start_calibration(struct LD2410S *s, uint16_t trigger, uint16_t retention, uint16_t duration_secs) {
+int ld2410s_uart_start_calibration(struct LD2410S_uart *s, uint16_t trigger, uint16_t retention, uint16_t duration_secs) {
   uint8_t cal_data[6];
   write_u16_le(cal_data + 0, trigger);
   write_u16_le(cal_data + 2, retention);
@@ -310,6 +310,6 @@ int ld2410s_start_calibration(struct LD2410S *s, uint16_t trigger, uint16_t rete
   return session_cmd(s->session, CMD_CALIBRATE, cal_data, sizeof(cal_data), NULL, 0, NULL);
 }
 
-size_t ld2410s_get_vacant_reports_count(struct LD2410S *s) {
+size_t ld2410s_uart_get_vacant_reports_count(struct LD2410S_uart *s) {
   return atomic_load_explicit(&s->last_vacancy_count, memory_order_relaxed);
 }
