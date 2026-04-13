@@ -64,8 +64,7 @@ static void *poller_thread(void *arg) {
   return NULL;
 }
 
-struct LD2410S *ld2410s_init(const struct LD2410S_config *cfg,
-                             ld2410s_state_change_cb cb, void *user_data) {
+struct LD2410S *ld2410s_init(const struct LD2410S_config *cfg, ld2410s_state_change_cb cb, void *user_data) {
   if (cfg->sensor_report_gpio < 0 && !cfg->enable_uart) {
     fprintf(stderr, "GPIO and UART interfaces disabled, nothing to monitor\n");
     return NULL;
@@ -96,9 +95,7 @@ struct LD2410S *ld2410s_init(const struct LD2410S_config *cfg,
   }
 
   if (cfg->enable_uart) {
-    s->uart = ld2410s_uart_init(cfg->device, cfg->debug,
-                                on_uart_report, s,
-                                on_uart_calibration_progress, s);
+    s->uart = ld2410s_uart_init(cfg->device, cfg->debug, on_uart_report, s, on_uart_calibration_progress, s);
     if (!s->uart || ld2410s_uart_start(s->uart) < 0) {
       ld2410s_free(s);
       return NULL;
@@ -139,8 +136,7 @@ int ld2410s_set_param(struct LD2410S *s, const char *name, uint32_t value) {
   return ld2410s_uart_set_param(s->uart, name, value);
 }
 
-int ld2410s_start_calibration(struct LD2410S *s, uint16_t trigger, uint16_t retention,
-                              uint16_t duration_secs) {
+int ld2410s_start_calibration(struct LD2410S *s, uint16_t trigger, uint16_t retention, uint16_t duration_secs) {
   if (!s || !s->uart) {
     // Return a dummy OK - we don't have UART, so calibration requests get signaled as OK
     return 0;

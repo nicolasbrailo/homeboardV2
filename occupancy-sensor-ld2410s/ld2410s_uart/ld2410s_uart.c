@@ -144,8 +144,8 @@ static void decode_calibration(void *ctx, const uint8_t *frame, size_t len) {
 
 /* --- Public API: Lifecycle --- */
 
-struct LD2410S_uart *ld2410s_uart_init(const char *dev_path, bool debug, ld2410s_report_cb report_cb, void *report_user_data,
-                             ld2410s_calibration_cb cal_cb, void *cal_user_data) {
+struct LD2410S_uart *ld2410s_uart_init(const char *dev_path, bool debug, ld2410s_report_cb report_cb,
+                                       void *report_user_data, ld2410s_calibration_cb cal_cb, void *cal_user_data) {
   struct LD2410S_uart *s = calloc(1, sizeof(*s));
   if (!s)
     return NULL;
@@ -324,7 +324,8 @@ int ld2410s_uart_set_param(struct LD2410S_uart *s, const char *name, uint32_t va
 
 /* --- Public API: Calibration --- */
 
-int ld2410s_uart_start_calibration(struct LD2410S_uart *s, uint16_t trigger, uint16_t retention, uint16_t duration_secs) {
+int ld2410s_uart_start_calibration(struct LD2410S_uart *s, uint16_t trigger, uint16_t retention,
+                                   uint16_t duration_secs) {
   uint8_t cal_data[6];
   write_u16_le(cal_data + 0, trigger);
   write_u16_le(cal_data + 2, retention);

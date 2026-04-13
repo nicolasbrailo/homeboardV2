@@ -16,11 +16,9 @@ struct LD2410S_config {
 
 typedef void (*ld2410s_state_change_cb)(bool occupied, uint16_t distance, void *user_data);
 
-struct LD2410S *ld2410s_init(const struct LD2410S_config *cfg,
-                             ld2410s_state_change_cb cb, void *user_data);
+struct LD2410S *ld2410s_init(const struct LD2410S_config *cfg, ld2410s_state_change_cb cb, void *user_data);
 void ld2410s_free(struct LD2410S *s);
 
 int ld2410s_get_common_params(struct LD2410S *s, struct LD2410S_common_params *out);
 int ld2410s_set_param(struct LD2410S *s, const char *name, uint32_t value);
-int ld2410s_start_calibration(struct LD2410S *s, uint16_t trigger, uint16_t retention,
-                              uint16_t duration_secs);
+int ld2410s_start_calibration(struct LD2410S *s, uint16_t trigger, uint16_t retention, uint16_t duration_secs);

@@ -1,7 +1,7 @@
 BIN_NAME = display-ctrl
 SRCS = main.c
-LDFLAGS += -static
+LDFLAGS += -lsystemd
 
-ALL: $(BIN_NAME)
+all: $(BIN_NAME)
 
 include ../common.mk

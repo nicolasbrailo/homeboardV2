@@ -9,8 +9,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#define DBUS_SERVICE   "io.homeboard.Occupancy"
-#define DBUS_PATH      "/io/homeboard/Occupancy"
+#define DBUS_SERVICE "io.homeboard.Occupancy"
+#define DBUS_PATH "/io/homeboard/Occupancy"
 #define DBUS_INTERFACE "io.homeboard.Occupancy1"
 
 struct config {
@@ -49,14 +49,12 @@ static void on_state_change(bool occupied, uint16_t distance, void *ud) {
   time_t now = time(NULL);
   struct tm tm;
   localtime_r(&now, &tm);
-  printf("%02d:%02d:%02d Occupancy=%s Distance=%u\n",
-         tm.tm_hour, tm.tm_min, tm.tm_sec,
-         occupied ? "True" : "False", distance);
+  printf("%02d:%02d:%02d Occupancy=%s Distance=%u\n", tm.tm_hour, tm.tm_min, tm.tm_sec, occupied ? "True" : "False",
+         distance);
 
   if (!g_bus)
     return;
-  int r = sd_bus_emit_signal(g_bus, DBUS_PATH, DBUS_INTERFACE, "StateChanged",
-                             "bu", (int)occupied, (uint32_t)distance);
+  int r = sd_bus_emit_signal(g_bus, DBUS_PATH, DBUS_INTERFACE, "StateChanged", "bu", (int)occupied, (uint32_t)distance);
   if (r < 0)
     fprintf(stderr, "sd_bus_emit_signal: %s\n", strerror(-r));
   sd_bus_flush(g_bus);
@@ -113,13 +111,13 @@ static int apply_sensor_params(struct LD2410S *s, const struct config *cfg, cons
     memset(&current, 0xFF, sizeof(current)); /* force mismatch on every key */
   }
 
-  struct { const char *key; uint32_t *field; } params[] = {
-      {"farthest_gate",      &current.farthest_gate},
-      {"nearest_gate",       &current.nearest_gate},
-      {"unmanned_delay",     &current.unmanned_delay},
-      {"status_report_freq", &current.status_report_freq},
-      {"dist_report_freq",   &current.dist_report_freq},
-      {"response_speed",     &current.response_speed},
+  struct {
+    const char *key;
+    uint32_t *field;
+  } params[] = {
+      {"farthest_gate", &current.farthest_gate},       {"nearest_gate", &current.nearest_gate},
+      {"unmanned_delay", &current.unmanned_delay},     {"status_report_freq", &current.status_report_freq},
+      {"dist_report_freq", &current.dist_report_freq}, {"response_speed", &current.response_speed},
   };
 
   printf("Verifying device config:\n");

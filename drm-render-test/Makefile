@@ -1,8 +1,8 @@
 BIN_NAME = drm-render-test
 SRCS = main.c ../lib/drm_mgr/drm_mgr.c
-LDFLAGS += -static
 CFLAGS += -I../lib/drm_mgr
+LDFLAGS += -lsystemd
 
-ALL: $(BIN_NAME)
+all: $(BIN_NAME)
 
 include ../common.mk

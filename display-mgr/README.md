@@ -1,79 +1,77 @@
 # display-mgr
 
-A simple DRM display management daemon for the homeboard. It owns the DRM master, manages display power state, and grants exclusive framebuffer access to a single client via a Unix domain socket.
+A simple DRM display management daemon for the homeboard. It owns the DRM master, manages display power state, and grants exclusive framebuffer access to a single client over the system D-Bus.
 
 ## What it does
 
 - Opens `/dev/dri/card0` (or `card1`), takes DRM master, and creates a dumb framebuffer
 - Allocates a DMA-BUF for the framebuffer that can be shared with clients
-- Accepts commands over a Unix domain socket at `$XDG_RUNTIME_DIR/display-ctrl.sock`
-- Manages display on/off state, persisted to `$XDG_RUNTIME_DIR/display-ctrl.state`
-- Grants exclusive framebuffer leases to one client at a time, tracked by PID
+- Owns `io.homeboard.Display` on the system bus and exposes the `io.homeboard.Display1` interface at `/io/homeboard/Display`
+- Manages display on/off state
+- Grants exclusive framebuffer leases to one client at a time, tracked by D-Bus unique name
+- Releases the lease automatically when the holder disconnects from the bus (via `sd_bus_track`)
 - On shutdown, restores the display to whatever power state it was in at startup
 
 ## Architecture
 
-Single-threaded event loop: `sock_poll()` blocks for up to 1 second, accepts at most one client, reads its command, and returns. The main loop dispatches the command, closes the client socket, then checks if the lease holder is still alive.
+Single-threaded sd-bus event loop: `sd_bus_process` + `sd_bus_wait` with a 1 s idle timeout. All method handlers and the lease-tracking callback run on the main thread; there is no explicit liveness polling — the bus daemon notifies us when a peer disappears.
 
 ### Source files
 
 | File | Purpose |
 |------|---------|
-| `main.c` | Entry point, main loop, command dispatch |
+| `main.c` | Entry point, sd-bus event loop, shutdown sequencing |
 | `drm.c` | DRM device init, framebuffer creation, display on/off via `drmModeSetCrtc` |
-| `drm_lease.c` | Exclusive framebuffer lease tracking (assign/release/liveness by PID) |
-| `sock.c` | Unix socket setup, accept+recv, fd passing via `SCM_RIGHTS` |
-| `run_state.c` | Persists display power state to a file for external consumers |
+| `dbus.c` | D-Bus object vtable, lease tracking via `sd_bus_track`, `StateChanged` signal |
 
-## Socket protocol
+## D-Bus interface
 
-Clients connect to `$XDG_RUNTIME_DIR/display-ctrl.sock` (a `SOCK_STREAM` Unix domain socket), send a single newline-terminated command, receive a response, and disconnect. All connections are one-shot.
+Service: `io.homeboard.Display`
+Path: `/io/homeboard/Display`
+Interface: `io.homeboard.Display1`
 
-### Commands
+### Methods
 
-#### `on\n`
-Turn the display on. Response: `ok\n`.
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `On` | `()` → `()` | Turn the display on |
+| `Off` | `()` → `()` | Turn the display off |
+| `Status` | `()` → `s` | Returns `"on"` or `"off"` |
+| `AcquireLease` | `()` → `huuuuu` | Returns `(fd, width, height, stride, format, size)`. `format` is `DRM_FORMAT_XRGB8888`. Fails with `io.homeboard.Display.Error.LeaseHeld` if another client holds the lease. |
+| `ReleaseLease` | `()` → `()` | Release the lease. Fails with `io.homeboard.Display.Error.NotLeaseHolder` if the caller does not hold it. |
 
-#### `off\n`
-Turn the display off. Response: `ok\n`.
+### Signals
 
-#### `status\n`
-Query display power state. Response: `on\n` or `off\n`.
+| Signal | Signature | Description |
+|--------|-----------|-------------|
+| `StateChanged` | `s` | Fired when the display power state changes. Payload is `"on"` or `"off"`. |
 
-#### `get_drm_fd\n`
-Request exclusive access to the framebuffer. The response uses a two-part wire format:
+### Lease semantics
 
-1. An `int` status code:
-   - `0` = success
-   - `-1` = lease already held by another client
-   - `-2` = peer PID could not be identified
-2. On success only, a `sendmsg` with `SCM_RIGHTS` carrying:
-   - Ancillary data: the DMA-BUF file descriptor
-   - Payload: a `struct fb_info` (20 bytes):
-     ```c
-     struct fb_info {
-       uint32_t width;
-       uint32_t height;
-       uint32_t stride;
-       uint32_t format;  // DRM_FORMAT_XRGB8888
-       uint32_t size;
-     };
-     ```
+Only one client may hold the lease at a time. The daemon tracks the holder by the caller's unique bus name (e.g. `:1.42`) using `sd_bus_track_add_sender`. When that name drops off the bus — normal disconnect, process exit, or crash — the lease clears automatically on the next bus event. PID is still queried via `sd_bus_creds_get_pid()` for logging.
 
-The client can then `mmap()` the DMA-BUF fd to render directly into the framebuffer.
+The returned file descriptor is a DMA-BUF; the client `mmap()`s it to render directly into the framebuffer.
 
-Only one client may hold the lease at a time. The daemon tracks the lease holder by PID (via `SO_PEERCRED`) and detects client death with `kill(pid, 0)`.
+## D-Bus policy
 
-#### `close_drm_fd\n`
-Release the framebuffer lease. The daemon verifies the caller's PID matches the lease holder. Response: `ok\n`.
+Owning a name on the **system** bus requires a policy file. `io.homeboard.Display.conf` lives in this repo and is installed with:
+
+```
+make deploy-dbus-policy
+```
+
+Without it, `sd_bus_request_name` returns `EACCES`. The policy's `<policy user="...">` must match the service's runtime user.
 
 ## Build
 
-Requires `libdrm-dev`. Cross-compiled for ARM (Raspberry Pi Zero) via `common.mk`:
+Requires `libdrm-dev` and `libsystemd-dev` in the cross-compile sysroot:
 
 ```
+make install_sysroot_deps
 make
 ```
+
+`libdrm` is statically linked; `libsystemd` is dynamic (no static build ships on Debian/Raspbian).
 
 ## Permissions
 

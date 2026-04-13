@@ -1,7 +1,7 @@
 BIN_NAME = show-img
 SRCS = main.c jpeg_loader.c img_render.c ../lib/drm_mgr/drm_mgr.c
 CFLAGS += -I../lib/drm_mgr
-LDFLAGS += -static -ljpeg
+LDFLAGS += -Wl,-Bstatic -ljpeg -Wl,-Bdynamic -lsystemd
 
 all: $(BIN_NAME)
 
