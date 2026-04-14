@@ -4,9 +4,9 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "drm_mgr.h"
-#include "img_render.h"
-#include "jpeg_loader.h"
+#include "drm_mgr/drm_mgr.h"
+#include "jpeg_render/img_render.h"
+#include "jpeg_render/jpeg_loader.h"
 
 static volatile sig_atomic_t g_quit;
 

@@ -1,6 +1,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <systemd/sd-bus.h>
@@ -17,6 +18,7 @@ struct DRM_Mgr {
   void *fb;
   int dmabuf_fd;
   uint32_t fb_size;
+  bool holds_drm;
 };
 
 struct DRM_Mgr *drm_mgr_init() {
@@ -24,6 +26,7 @@ struct DRM_Mgr *drm_mgr_init() {
   if (!self)
     return NULL;
   self->dmabuf_fd = -1;
+  self->holds_drm = false;
 
   int r = sd_bus_open_system(&self->bus);
   if (r < 0) {
@@ -37,12 +40,19 @@ struct DRM_Mgr *drm_mgr_init() {
 void drm_mgr_free(struct DRM_Mgr *self) {
   if (!self)
     return;
+
+  if (self->holds_drm)
+    drm_mgr_release_fb(self);
+
   if (self->bus)
     sd_bus_flush_close_unref(self->bus);
   free(self);
 }
 
-void *drm_mgr_acquire_fb(struct DRM_Mgr *self, struct fb_info *info) {
+uint32_t *drm_mgr_acquire_fb(struct DRM_Mgr *self, struct fb_info *info) {
+  if (!self)
+    return NULL;
+
   sd_bus_error err = SD_BUS_ERROR_NULL;
   sd_bus_message *reply = NULL;
 
@@ -81,10 +91,16 @@ void *drm_mgr_acquire_fb(struct DRM_Mgr *self, struct fb_info *info) {
   self->fb = fb;
   self->dmabuf_fd = owned_fd;
   self->fb_size = info->size;
+  self->holds_drm = true;
   return fb;
 }
 
 void drm_mgr_release_fb(struct DRM_Mgr *self) {
+  if (!self->holds_drm) {
+    fprintf(stderr, "Error: attempting to release DRM, but not holding it\n");
+    return;
+  }
+
   if (self->fb) {
     munmap(self->fb, self->fb_size);
     self->fb = NULL;
@@ -99,4 +115,5 @@ void drm_mgr_release_fb(struct DRM_Mgr *self) {
   if (r < 0)
     fprintf(stderr, "ReleaseLease: %s\n", err.message ? err.message : strerror(-r));
   sd_bus_error_free(&err);
+  self->holds_drm = false;
 }
