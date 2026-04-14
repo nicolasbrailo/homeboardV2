@@ -10,6 +10,8 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#define IMG_MIN_SZ 128
+#define IMG_MAX_SZ 128
 #define MAX_CLIENT_ID 128
 
 struct pp_www_session {
@@ -174,11 +176,11 @@ struct pp_www_session *pp_www_session_init(const char *server_url, uint32_t targ
     fprintf(stderr, "pp_www_session_init: empty server_url\n");
     return NULL;
   }
-  if (target_w < 128 || target_h < 128) {
+  if (target_w < IMG_MIN_SZ || target_h < IMG_MIN_SZ ) {
     fprintf(stderr, "pp_www_session_init: Requested target size too small\n");
     return NULL;
   }
-  if (target_w > 3840 || target_h > 3840) {
+  if (target_w > IMG_MAX_SZ || target_h > IMG_MAX_SZ) {
     fprintf(stderr, "pp_www_session_init: Requested target size too big\n");
     return NULL;
   }
@@ -233,6 +235,14 @@ void pp_www_session_free(struct pp_www_session *s) {
 }
 
 int pp_www_session_set_target_size(struct pp_www_session *s, uint32_t w, uint32_t h) {
+  if (w < IMG_MIN_SZ || h < IMG_MIN_SZ ) {
+    fprintf(stderr, "pp_www_session_set_target_size: Requested target size too small\n");
+    return -1;
+  }
+  if (w > IMG_MAX_SZ || h > IMG_MAX_SZ) {
+    fprintf(stderr, "pp_www_session_set_target_size: Requested target size too big\n");
+    return -1;
+  }
   uint32_t ow = atomic_exchange(&s->target_w, w);
   uint32_t oh = atomic_exchange(&s->target_h, h);
   if (ow == w && oh == h)
