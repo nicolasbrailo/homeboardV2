@@ -1,22 +1,17 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 // Load jpeg after std*, it doesn't include on its own
 #include <jpeglib.h>
 
 #include "jpeg_loader.h"
 
-struct jpeg_image *jpeg_load(const char *path, uint32_t target_w, uint32_t target_h) {
+static struct jpeg_image *jpeg_load_file(FILE *f, const char *src_name, uint32_t target_w, uint32_t target_h) {
   struct jpeg_image *img = malloc(sizeof(struct jpeg_image));
   if (!img) {
-    return NULL;
-  }
-
-  FILE *f = fopen(path, "rb");
-  if (!f) {
-    perror(path);
-    free(img);
+    fclose(f);
     return NULL;
   }
 
@@ -27,7 +22,7 @@ struct jpeg_image *jpeg_load(const char *path, uint32_t target_w, uint32_t targe
   jpeg_stdio_src(&cinfo, f);
 
   if (jpeg_read_header(&cinfo, TRUE) != JPEG_HEADER_OK) {
-    fprintf(stderr, "bad jpeg header: %s\n", path);
+    fprintf(stderr, "bad jpeg header: %s\n", src_name);
     jpeg_destroy_decompress(&cinfo);
     fclose(f);
     free(img);
@@ -72,6 +67,25 @@ struct jpeg_image *jpeg_load(const char *path, uint32_t target_w, uint32_t targe
   jpeg_destroy_decompress(&cinfo);
   fclose(f);
   return img;
+}
+
+struct jpeg_image *jpeg_load(const char *path, uint32_t target_w, uint32_t target_h) {
+  FILE *f = fopen(path, "rb");
+  if (!f) {
+    perror(path);
+    return NULL;
+  }
+  return jpeg_load_file(f, path, target_w, target_h);
+}
+
+struct jpeg_image *jpeg_load_fd(int fd, uint32_t target_w, uint32_t target_h) {
+  FILE *f = fdopen(fd, "rb");
+  if (!f) {
+    perror("fdopen");
+    close(fd);
+    return NULL;
+  }
+  return jpeg_load_file(f, "<fd>", target_w, target_h);
 }
 
 void jpeg_free(struct jpeg_image *img) {

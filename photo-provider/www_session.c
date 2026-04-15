@@ -11,7 +11,7 @@
 #include <unistd.h>
 
 #define IMG_MIN_SZ 128
-#define IMG_MAX_SZ 128
+#define IMG_MAX_SZ 3840
 #define MAX_CLIENT_ID 128
 
 struct pp_www_session {

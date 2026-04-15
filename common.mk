@@ -24,15 +24,16 @@ CFLAGS+=\
 	-Winvalid-pch \
 	-Wmissing-field-initializers \
 	-Wmissing-include-dirs \
-	-Wno-strict-prototypes \
-	-Wno-unused-function \
-	-Wno-unused-parameter \
 	-Woverflow \
 	-Wpointer-arith \
 	-Wredundant-decls \
 	-Wstrict-aliasing=2 \
 	-Wundef \
 	-Wuninitialized \
+	-Wno-strict-prototypes \
+	-Wno-unused-function \
+	-Wno-unused-parameter \
+	-Wno-c23-extensions \
 
 xcompile-start:
 	../rpiz-xcompile/mount_rpy_root.sh ~/src/xcomp-rpiz-env

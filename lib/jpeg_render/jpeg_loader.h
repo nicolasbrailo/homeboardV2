@@ -13,5 +13,9 @@ struct jpeg_image {
 // Returns a malloc'd image, or NULL on failure.
 struct jpeg_image *jpeg_load(const char *path, uint32_t target_w, uint32_t target_h);
 
+// Same, but reads from an already-open fd (eg. a memfd). Takes ownership of
+// fd: fd is closed before returning, whether or not decoding succeeds.
+struct jpeg_image *jpeg_load_fd(int fd, uint32_t target_w, uint32_t target_h);
+
 // Free a loaded image.
 void jpeg_free(struct jpeg_image *img);

@@ -1,0 +1,20 @@
+#pragma once
+
+#include <stdint.h>
+
+#include "drm_mgr/drm_mgr.h"
+
+struct Slideshow;
+
+// Creates a slideshow that renders into `fb` (borrowed; owned by the caller).
+// Initially stopped.
+struct Slideshow *slideshow_init(uint32_t *fb, const struct fb_info *fbi, uint32_t transition_time_s,
+                                 uint32_t rotation_deg);
+
+// Free the slideshow. Stops the worker if running.
+void slideshow_free(struct Slideshow *s);
+
+// Start / stop the worker. Safe to call repeatedly. Calling start when
+// already running (or stop when already stopped) is a no-op.
+void slideshow_start(struct Slideshow *s);
+void slideshow_stop(struct Slideshow *s);
