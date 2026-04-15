@@ -190,7 +190,7 @@ int display_run_dbus_loop(struct Display *s) {
     r = sd_bus_wait(s->dbus, (uint64_t)-1);
     if (r < 0 && -r != EINTR) {
       fprintf(stderr, "sd_bus_wait: %s\n", strerror(-r));
-      return r;
     }
+    return r;
   }
 }
