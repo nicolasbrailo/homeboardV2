@@ -1,4 +1,5 @@
 {
   "transition_time_s": 30,
-  "rotation": 0
+  "rotation": 0,
+  "embed_qr": false
 }

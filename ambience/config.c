@@ -12,6 +12,7 @@ int ambience_config_load(const char *path, struct ambience_config *cfg) {
 
   cfg->transition_time_s = 30;
   cfg->rotation = 0;
+  cfg->embed_qr = false;
 
   struct json_object *val;
   if (json_object_object_get_ex(root, "transition_time_s", &val)) {
@@ -30,8 +31,11 @@ int ambience_config_load(const char *path, struct ambience_config *cfg) {
     }
     cfg->rotation = (uint32_t)n;
   }
+  if (json_object_object_get_ex(root, "embed_qr", &val))
+    cfg->embed_qr = json_object_get_boolean(val);
 
   json_object_put(root);
-  printf("Config loaded: transition_time_s=%u rotation=%u\n", cfg->transition_time_s, cfg->rotation);
+  printf("Config loaded: transition_time_s=%u rotation=%u embed_qr=%d\n", cfg->transition_time_s, cfg->rotation,
+         cfg->embed_qr);
   return 0;
 }

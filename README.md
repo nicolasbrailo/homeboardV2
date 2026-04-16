@@ -50,4 +50,5 @@ This should verify the full dev cycle works (cross compile, deploy to target). T
 * Make the eink pins runtime config?
 * eink, verify why partial update isn't working
 * Create a global target to install all dbus policies
+* hysteresis for occupancy service
 

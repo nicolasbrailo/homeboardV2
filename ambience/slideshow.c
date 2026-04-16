@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "slideshow.h"
+#include "dbus_helpers.h"
 
 #include <errno.h>
 #include <pthread.h>
@@ -15,31 +16,35 @@
 #include "jpeg_render/img_render.h"
 #include "jpeg_render/jpeg_loader.h"
 
-#define DBUS_SERVICE "io.homeboard.PhotoProvider"
-#define DBUS_PATH "/io/homeboard/PhotoProvider"
-#define DBUS_INTERFACE "io.homeboard.PhotoProvider1"
+#define DBUS_PHOTO_SERVICE "io.homeboard.PhotoProvider"
+#define DBUS_PHOTO_PATH "/io/homeboard/PhotoProvider"
+#define DBUS_PHOTO_INTERFACE "io.homeboard.PhotoProvider1"
 
-// Lifecycle: start/stop are only ever called from the main (dbus dispatch)
-// thread, so worker_running needs no synchronization. The worker is signalled
-// to stop via stop_sem: stop() posts it, worker's sem_timedwait returns 0 and
-// the loop exits. sem_post is durable — if it fires while the worker is
-// mid-fetch, the next sem_timedwait returns immediately.
+// Lifecycle: start/stop/next are only ever called from the main (dbus
+// dispatch) thread, so worker_running needs no synchronization. The worker
+// waits on wake_sem: stop() and next() both post it to cut the wait short.
+// stop_requested disambiguates: set before a stop post, clear otherwise.
+// sem_post is durable — if it fires while the worker is mid-fetch, the next
+// sem_timedwait returns immediately.
 struct Slideshow {
   uint32_t *fb;
   struct fb_info fbi;
   uint32_t transition_time_s;
   enum rotation rotation;
+  uint32_t target_w; uint32_t target_h; bool embed_qr;
 
   sd_bus *bus;
+  sd_bus_slot *photo_svc_monitor;
   pthread_t worker;
   bool worker_running;
-  sem_t stop_sem;
+  sem_t wake_sem;
+  bool stop_requested;
 };
 
 static int fetch_one(sd_bus *bus, int *fd_out, char **meta_out) {
   sd_bus_error err = SD_BUS_ERROR_NULL;
   sd_bus_message *reply = NULL;
-  int r = sd_bus_call_method(bus, DBUS_SERVICE, DBUS_PATH, DBUS_INTERFACE, "GetPhoto", &err, &reply, "");
+  int r = sd_bus_call_method(bus, DBUS_PHOTO_SERVICE, DBUS_PHOTO_PATH, DBUS_PHOTO_INTERFACE, "GetPhoto", &err, &reply, "");
   if (r < 0) {
     fprintf(stderr, "GetPhoto failed: %s\n", err.message ? err.message : strerror(-r));
     sd_bus_error_free(&err);
@@ -68,9 +73,7 @@ static int fetch_one(sd_bus *bus, int *fd_out, char **meta_out) {
   return 0;
 }
 
-static void render_meta(struct Slideshow *s, char *meta) {
-  printf("slideshow: %s\n", meta);
-}
+static void render_meta(struct Slideshow *s, char *meta) { printf("slideshow: %s\n", meta); }
 
 static void render_fd(struct Slideshow *s, int fd) {
   struct jpeg_image *img = jpeg_load_fd(fd, s->fbi.width, s->fbi.height);
@@ -83,14 +86,14 @@ static void render_fd(struct Slideshow *s, int fd) {
   jpeg_free(img);
 }
 
-// Returns true if stop was requested, false on timeout.
-static bool wait_or_stop(sem_t *sem, uint32_t secs) {
+// Returns true if stop was requested, false on timeout or next-request.
+static bool wait_or_stop(struct Slideshow *s, uint32_t secs) {
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
   ts.tv_sec += secs;
   for (;;) {
-    if (sem_timedwait(sem, &ts) == 0)
-      return true;
+    if (sem_timedwait(&s->wake_sem, &ts) == 0)
+      return s->stop_requested;
     if (errno == ETIMEDOUT)
       return false;
     if (errno == EINTR)
@@ -112,14 +115,51 @@ static void *worker_main(void *ud) {
       close(fd);
       free(meta);
     }
-    if (wait_or_stop(&s->stop_sem, s->transition_time_s))
+    if (wait_or_stop(s, s->transition_time_s))
       break;
   }
   return NULL;
 }
 
+// Push initial config to photo-provider: target size matched to the physical
+// screen (axes swapped for 90/270 rotation so the server renders at the
+// correct aspect ratio) and embed_qr.
+static int push_initial_config(sd_bus *bus, uint32_t w, uint32_t h, bool embed_qr) {
+  sd_bus_error err = SD_BUS_ERROR_NULL;
+  int r = sd_bus_call_method(bus, DBUS_PHOTO_SERVICE, DBUS_PHOTO_PATH, DBUS_PHOTO_INTERFACE, "SetTargetSize", &err, NULL, "uu", w, h);
+  if (r < 0) {
+    fprintf(stderr, "SetTargetSize failed: %s\n", err.message ? err.message : strerror(-r));
+    sd_bus_error_free(&err);
+    return -1;
+  }
+  sd_bus_error_free(&err);
+
+  r = sd_bus_call_method(bus, DBUS_PHOTO_SERVICE, DBUS_PHOTO_PATH, DBUS_PHOTO_INTERFACE, "SetEmbedQr", &err, NULL, "b",
+                         (int)(embed_qr ? 1 : 0));
+  if (r < 0) {
+    fprintf(stderr, "SetEmbedQr failed: %s\n", err.message ? err.message : strerror(-r));
+    sd_bus_error_free(&err);
+    return -1;
+  }
+  sd_bus_error_free(&err);
+  printf("photo-provider configured: %ux%u embed_qr=%d\n", w, h, embed_qr);
+  return 0;
+}
+
+static void on_photo_svc_updown(void *ud, bool up) {
+  if (!up) {
+    fprintf(stderr, "WARNING: Occupancy service is down, assuming no presence (and slideshow will shutdown)\n");
+    return;
+  }
+
+  struct Slideshow *s = ud;
+  if (push_initial_config(s->bus, s->target_w, s->target_h, s->embed_qr) < 0) {
+    fprintf(stderr, "WARNING: Failed to config photo provider service '%s'.\n", DBUS_PHOTO_SERVICE);
+  }
+}
+
 struct Slideshow *slideshow_init(uint32_t *fb, const struct fb_info *fbi, uint32_t transition_time_s,
-                                 uint32_t rotation_deg) {
+                                 uint32_t rotation_deg, bool embed_qr) {
   if (!fb || !fbi || transition_time_s == 0)
     return NULL;
   if (rotation_deg != 0 && rotation_deg != 90 && rotation_deg != 180 && rotation_deg != 270) {
@@ -136,7 +176,7 @@ struct Slideshow *slideshow_init(uint32_t *fb, const struct fb_info *fbi, uint32
   s->fbi = *fbi;
   s->transition_time_s = transition_time_s;
   s->rotation = (enum rotation)rotation_deg;
-  if (sem_init(&s->stop_sem, 0, 0) != 0) {
+  if (sem_init(&s->wake_sem, 0, 0) != 0) {
     perror("sem_init");
     free(s);
     return NULL;
@@ -144,9 +184,27 @@ struct Slideshow *slideshow_init(uint32_t *fb, const struct fb_info *fbi, uint32
   int r = sd_bus_open_system(&s->bus);
   if (r < 0) {
     fprintf(stderr, "slideshow: sd_bus_open_system: %s\n", strerror(-r));
-    sem_destroy(&s->stop_sem);
+    sem_destroy(&s->wake_sem);
     free(s);
     return NULL;
+  }
+
+  s->embed_qr = embed_qr;
+  s->target_w = fbi->width;
+  s->target_h = fbi->height;
+  if (rotation_deg == 90 || rotation_deg == 270) {
+    s->target_w = fbi->height;
+    s->target_h = fbi->width;
+  }
+
+  s->photo_svc_monitor = on_service_updown(s->bus, DBUS_PHOTO_SERVICE, on_photo_svc_updown, s);
+  if (!is_service_up(s->bus, DBUS_PHOTO_SERVICE)) {
+    fprintf(stderr, "WARNING: %s is not running; photos can't be displayed until it starts.\n", DBUS_PHOTO_SERVICE);
+  }
+
+  if (push_initial_config(s->bus, s->target_w, s->target_h, s->embed_qr) < 0) {
+    // We'll retry if the service comes up later, but warn the user
+    fprintf(stderr, "WARNING: Failed to config photo provider service '%s'.\n", DBUS_PHOTO_SERVICE);
   }
   return s;
 }
@@ -155,7 +213,9 @@ void slideshow_free(struct Slideshow *s) {
   if (!s)
     return;
   slideshow_stop(s);
-  sem_destroy(&s->stop_sem);
+  sem_destroy(&s->wake_sem);
+  if (s->photo_svc_monitor)
+    sd_bus_slot_unref(s->photo_svc_monitor);
   if (s->bus)
     sd_bus_flush_close_unref(s->bus);
   free(s);
@@ -176,11 +236,21 @@ void slideshow_stop(struct Slideshow *s) {
   if (!s->worker_running)
     return;
   printf("Stopping slideshow\n");
-  sem_post(&s->stop_sem);
+  s->stop_requested = true;
+  sem_post(&s->wake_sem);
   pthread_join(s->worker, NULL);
   s->worker_running = false;
-  // Drain the post in case the worker exited for another reason before
-  // consuming it; otherwise the next start() would see an immediate stop.
-  while (sem_trywait(&s->stop_sem) == 0) {
+  s->stop_requested = false;
+  // Drain any leftover posts (e.g. a next() queued just before stop) so the
+  // next start() begins with a clean wait.
+  while (sem_trywait(&s->wake_sem) == 0) {
   }
+}
+
+void slideshow_next(struct Slideshow *s) {
+  printf("User requested to advance to the next picture\n");
+  if (!s->worker_running)
+    return;
+  printf("Advancing slideshow\n");
+  sem_post(&s->wake_sem);
 }
