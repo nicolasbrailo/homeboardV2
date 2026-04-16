@@ -13,8 +13,10 @@ D-Bus interface for manual control.
   slideshow; when vacant it does the inverse.
 - Runs a background worker that pulls photos from `photo-provider` and renders
   them at the configured interval with optional rotation and QR-code overlay.
-- Exposes `io.homeboard.Ambience1.Next()` so external triggers (buttons,
-  automations) can skip to the next picture immediately.
+- Exposes `io.homeboard.Ambience1` for external triggers (buttons,
+  automations): `Next()` to skip to the next picture, and
+  `ForceSlideshowOn()` / `ForceSlideshowOff()` to override the occupancy
+  gate until the next real occupancy report arrives.
 
 ## Dependencies
 
@@ -34,6 +36,11 @@ All three must be reachable on the **system** bus.
 - JPEG decode and scale (bilinear) to the framebuffer, with 0/90/180/270°
   rotation
 - Occupancy-gated lifecycle: slideshow only runs when someone is in the room
+- Manual override: `ForceSlideshowOn` acts like a synthetic `occupied=true`
+  (any real report then wins). `ForceSlideshowOff` latches the display off
+  and ignores `occupied=true` reports until a real `occupied=false` releases
+  the latch — needed because the occupancy sensor re-publishes on distance
+  changes, not just state transitions.
 - Worker can be interrupted mid-wait for immediate advance (`Next`)
 - Single sd_bus event loop shared between all D-Bus consumers
 
@@ -77,12 +84,21 @@ make next                   # trigger Ambience.Next() over SSH (for testing)
 | Service | `io.homeboard.Ambience` |
 | Object | `/io/homeboard/Ambience` |
 | Interface | `io.homeboard.Ambience1` |
-| Method | `Next()` — advance to the next picture immediately |
+
+Methods (all take no arguments, return nothing):
+
+| Method | Effect |
+|---|---|
+| `Next()` | Advance to the next picture immediately |
+| `ForceSlideshowOn()` | Turn the display on and start the slideshow as if `occupied=true` had been reported. Cleared by the next real occupancy report. |
+| `ForceSlideshowOff()` | Turn the display off and stop the slideshow. Latched: subsequent `occupied=true` reports are ignored until a real `occupied=false` report (or the occupancy service dropping out) releases it. After release, normal behavior resumes — the next `occupied=true` turns the display back on. `ForceSlideshowOn()` also releases the latch. |
 
 Shell invocation:
 
 ```sh
 busctl --system call io.homeboard.Ambience /io/homeboard/Ambience io.homeboard.Ambience1 Next
+busctl --system call io.homeboard.Ambience /io/homeboard/Ambience io.homeboard.Ambience1 ForceSlideshowOn
+busctl --system call io.homeboard.Ambience /io/homeboard/Ambience io.homeboard.Ambience1 ForceSlideshowOff
 ```
 
 The policy file `io.homeboard.Ambience.conf` grants `own` to the running user
@@ -92,15 +108,21 @@ and send/receive access to everyone else. Without it,
 ## Layer map
 
 ```
-main.c             thin: config, lifecycle, wires modules, runs the sd_bus loop
+main.c             thin: opens the shared sd_bus, loads config, wires modules,
+                   runs the dispatch loop
 config.{c,h}       json-c config parsing
-dbus.{c,h}         owns the shared sd_bus; hosts io.homeboard.Ambience1 (Next)
-display.{c,h}      borrows the sd_bus; subscribes to Occupancy1.StateChanged,
-                   calls Display1.On/Off, invokes caller callbacks on toggle
-slideshow.{c,h}    worker thread: fetches from PhotoProvider, decodes, renders.
-                   Holds its own sd_bus connection (calls into PhotoProvider
-                   are synchronous; a dedicated connection keeps them off the
-                   dispatch bus).
+dbus.{c,h}         borrows the shared sd_bus; hosts io.homeboard.Ambience1
+                   (Next, ForceSlideshowOn, ForceSlideshowOff)
+display.{c,h}      borrows the shared sd_bus; subscribes to
+                   Occupancy1.StateChanged, calls Display1.On/Off, invokes
+                   caller callbacks on toggle. Exposes display_force_on /
+                   display_force_off for manual overrides that synthesise an
+                   occupancy report.
+slideshow.{c,h}    borrows the shared sd_bus for service up/down monitoring
+                   and startup config. Worker thread: fetches from
+                   PhotoProvider, decodes, renders. Holds a dedicated
+                   sd_bus connection for GetPhoto so the synchronous call
+                   never touches the dispatch bus from another thread.
 ../lib/drm_mgr/              framebuffer acquisition via display-mgr
 ../lib/jpeg_render/          libjpeg-based decode + scaler
 ```
@@ -108,21 +130,26 @@ slideshow.{c,h}    worker thread: fetches from PhotoProvider, decodes, renders.
 ### Threading
 
 - Main thread runs a single `sd_bus_process` / `sd_bus_wait` loop via
-  `ambience_dbus_run_once`. Both `dbus.c` (server) and `display.c` (client
-  matches + method calls) share that bus. `Next()` is dispatched on this
-  thread.
+  `ambience_dbus_run_once`. `dbus.c` (server vtable), `display.c` (Occupancy
+  match + Display1.On/Off calls), and `slideshow.c` (PhotoProvider
+  name-owner match + initial `SetTargetSize`/`SetEmbedQr`) all share that
+  bus. `Next`, `ForceSlideshowOn`, `ForceSlideshowOff`, and the occupancy
+  signal handler all dispatch on this thread.
 - Slideshow worker thread: fetches one photo (`GetPhoto`), decodes, renders,
   then waits on `wake_sem` up to `transition_time_s`. `slideshow_stop()` and
   `slideshow_next()` both post the sem; `stop_requested` (plain bool,
-  synchronised by the sem) disambiguates. The worker has its own sd_bus
-  connection so a slow `GetPhoto` doesn't starve the dispatch loop.
+  synchronised by the sem) disambiguates. The worker uses a dedicated
+  `sd_bus` connection (`worker_bus`) so its synchronous `GetPhoto` calls
+  never touch the dispatch bus from another thread — `sd_bus` is not
+  thread-safe.
 
 ### Startup ordering
 
-`dbus` must be created before `display`: `display_init` takes a borrowed
-`sd_bus *` from `ambience_dbus_get_bus(dbus)`. Teardown is the reverse —
-`display_free` unrefs its slots on the shared bus before `ambience_dbus_free`
-closes it.
+`main.c` opens the shared `sd_bus` up front and passes it as a borrowed
+pointer to `slideshow_init`, `display_init`, and `ambience_dbus_init`. The
+three modules can be created in any order; they keep only a borrowed
+reference. Teardown frees each module (unrefs its slots) before `main.c`
+calls `sd_bus_flush_close_unref` on the shared bus.
 
 ## Build gotchas
 
