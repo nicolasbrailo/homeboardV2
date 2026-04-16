@@ -1,10 +1,10 @@
 #pragma once
 
-#include <systemd/sd-bus.h>
 #include <stdbool.h>
+#include <systemd/sd-bus.h>
 
 // One-shot check: does anyone currently own the occupancy service name?
-bool is_service_up(sd_bus *bus, const char* svc_name);
+bool is_service_up(sd_bus *bus, const char *svc_name);
 
 // Invoked when svc_name appears on (up=true) or disappears from (up=false) the bus.
 typedef void (*service_updown_cb)(void *ud, bool up);

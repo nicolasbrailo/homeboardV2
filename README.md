@@ -51,4 +51,8 @@ This should verify the full dev cycle works (cross compile, deploy to target). T
 * eink, verify why partial update isn't working
 * Create a global target to install all dbus policies
 * hysteresis for occupancy service
+* Add announcement overlay (overlay text on top of picture, with timeout)
+* Add remote control with dbus + www
+* Add previous picture command
+* Use sides of the display for info, eg weather service
 

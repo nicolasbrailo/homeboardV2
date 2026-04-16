@@ -176,7 +176,7 @@ struct pp_www_session *pp_www_session_init(const char *server_url, uint32_t targ
     fprintf(stderr, "pp_www_session_init: empty server_url\n");
     return NULL;
   }
-  if (target_w < IMG_MIN_SZ || target_h < IMG_MIN_SZ ) {
+  if (target_w < IMG_MIN_SZ || target_h < IMG_MIN_SZ) {
     fprintf(stderr, "pp_www_session_init: Requested target size too small\n");
     return NULL;
   }
@@ -235,7 +235,7 @@ void pp_www_session_free(struct pp_www_session *s) {
 }
 
 int pp_www_session_set_target_size(struct pp_www_session *s, uint32_t w, uint32_t h) {
-  if (w < IMG_MIN_SZ || h < IMG_MIN_SZ ) {
+  if (w < IMG_MIN_SZ || h < IMG_MIN_SZ) {
     fprintf(stderr, "pp_www_session_set_target_size: Requested target size too small\n");
     return -1;
   }

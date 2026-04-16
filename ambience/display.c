@@ -128,9 +128,11 @@ struct Display *display_init(sd_bus *bus, display_state_cb on_display_turned_on,
     return NULL;
   }
 
-  s->occupancy_name_owner_monitor = on_service_updown(s->dbus, DBUS_OCCUPANCY_SERVICE, on_occupancy_name_owner_changed, s);
+  s->occupancy_name_owner_monitor =
+      on_service_updown(s->dbus, DBUS_OCCUPANCY_SERVICE, on_occupancy_name_owner_changed, s);
   if (!is_service_up(s->dbus, DBUS_OCCUPANCY_SERVICE)) {
-    fprintf(stderr, "WARNING: %s is not running; no occupancy signals will arrive until it starts\n", DBUS_OCCUPANCY_SERVICE);
+    fprintf(stderr, "WARNING: %s is not running; no occupancy signals will arrive until it starts\n",
+            DBUS_OCCUPANCY_SERVICE);
   }
 
   printf("Display controller now monitoring occupancy signals %s.%s\n", DBUS_OCCUPANCY_INTERFACE,
@@ -165,8 +167,8 @@ void display_free(struct Display *s) {
   // Try to shutdown the display once this service goes down
   sd_bus_error err = SD_BUS_ERROR_NULL;
   sd_bus_message *reply = NULL;
-  const int r = sd_bus_call_method(s->dbus, DBUS_DISPLAY_SERVICE, DBUS_DISPLAY_PATH, DBUS_DISPLAY_INTERFACE,
-                                   "Off", &err, &reply, "");
+  const int r = sd_bus_call_method(s->dbus, DBUS_DISPLAY_SERVICE, DBUS_DISPLAY_PATH, DBUS_DISPLAY_INTERFACE, "Off",
+                                   &err, &reply, "");
   if (r < 0) {
     fprintf(stderr, "Failed to call Display.Off: %s\n", err.message ? err.message : strerror(-r));
   }

@@ -32,7 +32,9 @@ struct Slideshow {
   struct fb_info fbi;
   uint32_t transition_time_s;
   enum rotation rotation;
-  uint32_t target_w; uint32_t target_h; bool embed_qr;
+  uint32_t target_w;
+  uint32_t target_h;
+  bool embed_qr;
 
   // `bus` is shared with the main dispatch loop; only touched on the main
   // thread (monitor setup, push_initial_config, teardown). `worker_bus` is
@@ -52,7 +54,8 @@ struct Slideshow {
 static int fetch_one(sd_bus *bus, int *fd_out, char **meta_out) {
   sd_bus_error err = SD_BUS_ERROR_NULL;
   sd_bus_message *reply = NULL;
-  int r = sd_bus_call_method(bus, DBUS_PHOTO_SERVICE, DBUS_PHOTO_PATH, DBUS_PHOTO_INTERFACE, "GetPhoto", &err, &reply, "");
+  int r =
+      sd_bus_call_method(bus, DBUS_PHOTO_SERVICE, DBUS_PHOTO_PATH, DBUS_PHOTO_INTERFACE, "GetPhoto", &err, &reply, "");
   if (r < 0) {
     fprintf(stderr, "GetPhoto failed: %s\n", err.message ? err.message : strerror(-r));
     sd_bus_error_free(&err);
@@ -137,7 +140,8 @@ static void *worker_main(void *ud) {
 // correct aspect ratio) and embed_qr.
 static int push_initial_config(sd_bus *bus, uint32_t w, uint32_t h, bool embed_qr) {
   sd_bus_error err = SD_BUS_ERROR_NULL;
-  int r = sd_bus_call_method(bus, DBUS_PHOTO_SERVICE, DBUS_PHOTO_PATH, DBUS_PHOTO_INTERFACE, "SetTargetSize", &err, NULL, "uu", w, h);
+  int r = sd_bus_call_method(bus, DBUS_PHOTO_SERVICE, DBUS_PHOTO_PATH, DBUS_PHOTO_INTERFACE, "SetTargetSize", &err,
+                             NULL, "uu", w, h);
   if (r < 0) {
     fprintf(stderr, "SetTargetSize failed: %s\n", err.message ? err.message : strerror(-r));
     sd_bus_error_free(&err);

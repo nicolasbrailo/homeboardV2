@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-bool is_service_up(sd_bus *bus, const char* svc_name) {
+bool is_service_up(sd_bus *bus, const char *svc_name) {
   sd_bus_error err = SD_BUS_ERROR_NULL;
   sd_bus_message *reply = NULL;
   const char *owner = NULL;
@@ -14,8 +14,7 @@ bool is_service_up(sd_bus *bus, const char* svc_name) {
     if (sd_bus_error_has_name(&err, "org.freedesktop.DBus.Error.NameHasNoOwner")) {
       return 0;
     } else {
-      fprintf(stderr, "GetNameOwner(%s) failed: %s\n", svc_name,
-              err.message ? err.message : strerror(-r));
+      fprintf(stderr, "GetNameOwner(%s) failed: %s\n", svc_name, err.message ? err.message : strerror(-r));
       return 0;
     }
   } else {
@@ -51,9 +50,7 @@ static int service_updown_trampoline(sd_bus_message *m, void *p, sd_bus_error *e
   return 0;
 }
 
-static void free_updown_ctx(void *p) {
-  free(p);
-}
+static void free_updown_ctx(void *p) { free(p); }
 
 sd_bus_slot *on_service_updown(sd_bus *bus, const char *svc_name, service_updown_cb cb, void *ud) {
   struct updown_ctx *ctx = malloc(sizeof(*ctx));
