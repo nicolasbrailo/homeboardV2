@@ -29,6 +29,7 @@ struct EinkMeta *eink_meta_init(void) {
 void eink_meta_free(struct EinkMeta *em) {
   if (!em)
     return;
+  eink_clear(em->display);
   if (em->display)
     eink_delete(em->display);
   free(em);
