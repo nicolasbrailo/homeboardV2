@@ -30,20 +30,17 @@ static const sd_bus_vtable g_vtable[] = {
     SD_BUS_VTABLE_END,
 };
 
-struct AmbienceDbus *ambience_dbus_init(ambience_next_cb on_next, void *ud) {
+struct AmbienceDbus *ambience_dbus_init(sd_bus *bus, ambience_next_cb on_next, void *ud) {
+  if (!bus)
+    return NULL;
   struct AmbienceDbus *d = calloc(1, sizeof(*d));
   if (!d)
     return NULL;
+  d->bus = bus;
   d->on_next = on_next;
   d->ud = ud;
 
-  int r = sd_bus_open_system(&d->bus);
-  if (r < 0) {
-    fprintf(stderr, "ambience_dbus: sd_bus_open_system: %s\n", strerror(-r));
-    free(d);
-    return NULL;
-  }
-  r = sd_bus_add_object_vtable(d->bus, &d->vtable_slot, DBUS_PATH, DBUS_INTERFACE, g_vtable, d);
+  int r = sd_bus_add_object_vtable(d->bus, &d->vtable_slot, DBUS_PATH, DBUS_INTERFACE, g_vtable, d);
   if (r < 0) {
     fprintf(stderr, "sd_bus_add_object_vtable: %s\n", strerror(-r));
     ambience_dbus_free(d);
@@ -64,12 +61,8 @@ void ambience_dbus_free(struct AmbienceDbus *d) {
     return;
   if (d->vtable_slot)
     sd_bus_slot_unref(d->vtable_slot);
-  if (d->bus)
-    sd_bus_flush_close_unref(d->bus);
   free(d);
 }
-
-sd_bus *ambience_dbus_get_bus(struct AmbienceDbus *d) { return d->bus; }
 
 int ambience_dbus_run_once(struct AmbienceDbus *d) {
   int r = sd_bus_process(d->bus, NULL);

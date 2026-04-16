@@ -39,6 +39,7 @@ static int method_set_target_size(sd_bus_message *m, void *ud, sd_bus_error *err
     return sd_bus_error_set_errno(err, -r);
   if (pp_www_session_set_target_size(g_ws, w, h) < 0)
     return sd_bus_error_set(err, "io.homeboard.PhotoProvider.Error.ReregisterFailed", "re-register failed");
+  printf("PhotoProvider requested target size %dx%d\n", w, h);
   return sd_bus_reply_method_return(m, NULL);
 }
 
@@ -50,6 +51,7 @@ static int method_set_embed_qr(sd_bus_message *m, void *ud, sd_bus_error *err) {
     return sd_bus_error_set_errno(err, -r);
   if (pp_www_session_set_embed_qr(g_ws, v != 0) < 0)
     return sd_bus_error_set(err, "io.homeboard.PhotoProvider.Error.ReregisterFailed", "re-register failed");
+  printf("PhotoProvider requested QR=%s\n", v? "True":"False");
   return sd_bus_reply_method_return(m, NULL);
 }
 

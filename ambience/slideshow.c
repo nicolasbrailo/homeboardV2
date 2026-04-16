@@ -33,7 +33,12 @@ struct Slideshow {
   enum rotation rotation;
   uint32_t target_w; uint32_t target_h; bool embed_qr;
 
+  // `bus` is shared with the main dispatch loop; only touched on the main
+  // thread (monitor setup, push_initial_config, teardown). `worker_bus` is
+  // private to the worker thread and used for blocking GetPhoto calls, so the
+  // shared bus stays free of cross-thread access.
   sd_bus *bus;
+  sd_bus *worker_bus;
   sd_bus_slot *photo_svc_monitor;
   pthread_t worker;
   bool worker_running;
@@ -108,7 +113,7 @@ static void *worker_main(void *ud) {
   for (;;) {
     int fd = -1;
     char *meta = NULL;
-    if (fetch_one(s->bus, &fd, &meta) == 0) {
+    if (fetch_one(s->worker_bus, &fd, &meta) == 0) {
       printf("Displaying new picture\n");
       render_meta(s, meta);
       render_fd(s, fd);
@@ -158,9 +163,9 @@ static void on_photo_svc_updown(void *ud, bool up) {
   }
 }
 
-struct Slideshow *slideshow_init(uint32_t *fb, const struct fb_info *fbi, uint32_t transition_time_s,
+struct Slideshow *slideshow_init(sd_bus *bus, uint32_t *fb, const struct fb_info *fbi, uint32_t transition_time_s,
                                  uint32_t rotation_deg, bool embed_qr) {
-  if (!fb || !fbi || transition_time_s == 0)
+  if (!bus || !fb || !fbi || transition_time_s == 0)
     return NULL;
   if (rotation_deg != 0 && rotation_deg != 90 && rotation_deg != 180 && rotation_deg != 270) {
     fprintf(stderr, "slideshow_init: invalid rotation %u\n", rotation_deg);
@@ -181,13 +186,14 @@ struct Slideshow *slideshow_init(uint32_t *fb, const struct fb_info *fbi, uint32
     free(s);
     return NULL;
   }
-  int r = sd_bus_open_system(&s->bus);
+  int r = sd_bus_open_system(&s->worker_bus);
   if (r < 0) {
     fprintf(stderr, "slideshow: sd_bus_open_system: %s\n", strerror(-r));
     sem_destroy(&s->wake_sem);
     free(s);
     return NULL;
   }
+  s->bus = bus;
 
   s->embed_qr = embed_qr;
   s->target_w = fbi->width;
@@ -216,8 +222,8 @@ void slideshow_free(struct Slideshow *s) {
   sem_destroy(&s->wake_sem);
   if (s->photo_svc_monitor)
     sd_bus_slot_unref(s->photo_svc_monitor);
-  if (s->bus)
-    sd_bus_flush_close_unref(s->bus);
+  if (s->worker_bus)
+    sd_bus_flush_close_unref(s->worker_bus);
   free(s);
 }
 
