@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "slideshow.h"
 #include "dbus_helpers.h"
+#include "eink_meta.h"
 
 #include <errno.h>
 #include <pthread.h>
@@ -44,6 +45,8 @@ struct Slideshow {
   bool worker_running;
   sem_t wake_sem;
   bool stop_requested;
+
+  struct EinkMeta *eink_meta;
 };
 
 static int fetch_one(sd_bus *bus, int *fd_out, char **meta_out) {
@@ -78,7 +81,10 @@ static int fetch_one(sd_bus *bus, int *fd_out, char **meta_out) {
   return 0;
 }
 
-static void render_meta(struct Slideshow *s, char *meta) { printf("slideshow: %s\n", meta); }
+static void render_meta(struct Slideshow *s, char *meta) {
+  if (s->eink_meta)
+    eink_meta_render(s->eink_meta, meta);
+}
 
 static void render_fd(struct Slideshow *s, int fd) {
   struct jpeg_image *img = jpeg_load_fd(fd, s->fbi.width, s->fbi.height);
@@ -164,7 +170,7 @@ static void on_photo_svc_updown(void *ud, bool up) {
 }
 
 struct Slideshow *slideshow_init(sd_bus *bus, uint32_t *fb, const struct fb_info *fbi, uint32_t transition_time_s,
-                                 uint32_t rotation_deg, bool embed_qr) {
+                                 uint32_t rotation_deg, bool embed_qr, bool use_eink_for_metadata) {
   if (!bus || !fb || !fbi || transition_time_s == 0)
     return NULL;
   if (rotation_deg != 0 && rotation_deg != 90 && rotation_deg != 180 && rotation_deg != 270) {
@@ -203,6 +209,12 @@ struct Slideshow *slideshow_init(sd_bus *bus, uint32_t *fb, const struct fb_info
     s->target_h = fbi->width;
   }
 
+  if (use_eink_for_metadata) {
+    s->eink_meta = eink_meta_init();
+    if (!s->eink_meta)
+      fprintf(stderr, "WARNING: eink metadata display unavailable\n");
+  }
+
   s->photo_svc_monitor = on_service_updown(s->bus, DBUS_PHOTO_SERVICE, on_photo_svc_updown, s);
   if (!is_service_up(s->bus, DBUS_PHOTO_SERVICE)) {
     fprintf(stderr, "WARNING: %s is not running; photos can't be displayed until it starts.\n", DBUS_PHOTO_SERVICE);
@@ -224,6 +236,7 @@ void slideshow_free(struct Slideshow *s) {
     sd_bus_slot_unref(s->photo_svc_monitor);
   if (s->worker_bus)
     sd_bus_flush_close_unref(s->worker_bus);
+  eink_meta_free(s->eink_meta);
   free(s);
 }
 

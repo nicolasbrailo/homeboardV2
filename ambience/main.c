@@ -69,7 +69,8 @@ int main(int argc, char *argv[]) {
     goto end;
   }
 
-  slideshow = slideshow_init(bus, fb, &fbi, cfg.transition_time_s, cfg.rotation, cfg.embed_qr);
+  slideshow = slideshow_init(bus, fb, &fbi, cfg.transition_time_s, cfg.rotation, cfg.embed_qr,
+                             cfg.use_eink_for_metadata);
   display = display_init(bus, on_display_turned_on, on_display_turned_off, slideshow);
   struct ambience_ctx ctx = {.slideshow = slideshow, .display = display};
   dbus_mgr = ambience_dbus_init(bus, on_slideshow_next, on_force_on, on_force_off, &ctx);

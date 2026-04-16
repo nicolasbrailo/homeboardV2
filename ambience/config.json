@@ -1,5 +1,6 @@
 {
   "transition_time_s": 30,
-  "rotation": 0,
-  "embed_qr": false
+  "rotation": 180,
+  "embed_qr": true,
+  "use_eink_for_metadata": true
 }

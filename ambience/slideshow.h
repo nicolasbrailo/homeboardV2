@@ -12,7 +12,7 @@ struct Slideshow;
 // `bus` is borrowed; owned by the caller and must outlive the slideshow.
 // Initially stopped.
 struct Slideshow *slideshow_init(sd_bus *bus, uint32_t *fb, const struct fb_info *fbi, uint32_t transition_time_s,
-                                 uint32_t rotation_deg, bool embed_qr);
+                                 uint32_t rotation_deg, bool embed_qr, bool use_eink_for_metadata);
 
 // Free the slideshow. Stops the worker if running.
 void slideshow_free(struct Slideshow *s);
