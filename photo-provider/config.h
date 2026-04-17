@@ -9,6 +9,7 @@ struct pp_config {
   uint32_t target_h;
   bool embed_qr;
   uint32_t cache_depth;
+  uint32_t history_depth;
   bool dump_to_disk;
   char dump_dir[256];
   uint32_t connect_timeout_s;

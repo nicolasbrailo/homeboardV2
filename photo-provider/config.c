@@ -16,6 +16,7 @@ int pp_config_load(const char *path, struct pp_config *cfg) {
   cfg->target_h = 1080;
   cfg->embed_qr = true;
   cfg->cache_depth = 2;
+  cfg->history_depth = 8;
   cfg->dump_to_disk = false;
   strncpy(cfg->dump_dir, "/tmp/photo-provider", sizeof(cfg->dump_dir));
   cfg->connect_timeout_s = 5;
@@ -34,6 +35,10 @@ int pp_config_load(const char *path, struct pp_config *cfg) {
     int n = json_object_get_int(val);
     cfg->cache_depth = n < 1 ? 1 : (uint32_t)n;
   }
+  if (json_object_object_get_ex(root, "history_depth", &val)) {
+    int n = json_object_get_int(val);
+    cfg->history_depth = n < 0 ? 0 : (uint32_t)n;
+  }
   if (json_object_object_get_ex(root, "dump_to_disk", &val))
     cfg->dump_to_disk = json_object_get_boolean(val);
   if (json_object_object_get_ex(root, "dump_dir", &val))
@@ -44,7 +49,7 @@ int pp_config_load(const char *path, struct pp_config *cfg) {
     cfg->request_timeout_s = (uint32_t)json_object_get_int(val);
 
   json_object_put(root);
-  printf("Config loaded: server=%s %ux%u qr=%d cache=%u dump=%d dir=%s\n", cfg->server_url, cfg->target_w,
-         cfg->target_h, cfg->embed_qr, cfg->cache_depth, cfg->dump_to_disk, cfg->dump_dir);
+  printf("Config loaded: server=%s %ux%u qr=%d cache=%u history=%u dump=%d dir=%s\n", cfg->server_url, cfg->target_w,
+         cfg->target_h, cfg->embed_qr, cfg->cache_depth, cfg->history_depth, cfg->dump_to_disk, cfg->dump_dir);
   return 0;
 }

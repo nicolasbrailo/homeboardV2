@@ -31,6 +31,19 @@ static int method_get_photo(sd_bus_message *m, void *ud, sd_bus_error *err) {
   return r;
 }
 
+static int method_get_prev_photo(sd_bus_message *m, void *ud, sd_bus_error *err) {
+  (void)ud;
+  int fd = -1;
+  char *meta = NULL;
+  if (pp_cache_pop_prev(g_cache, &fd, &meta) < 0)
+    return sd_bus_error_set(err, "io.homeboard.PhotoProvider.Error.Unavailable", "no previous photo available");
+
+  int r = sd_bus_reply_method_return(m, "hs", fd, meta ? meta : "");
+  close(fd);
+  free(meta);
+  return r;
+}
+
 static int method_set_target_size(sd_bus_message *m, void *ud, sd_bus_error *err) {
   (void)ud;
   uint32_t w, h;
@@ -58,6 +71,7 @@ static int method_set_embed_qr(sd_bus_message *m, void *ud, sd_bus_error *err) {
 static const sd_bus_vtable g_vtable[] = {
     SD_BUS_VTABLE_START(0),
     SD_BUS_METHOD("GetPhoto", "", "hs", method_get_photo, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("GetPrevPhoto", "", "hs", method_get_prev_photo, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("SetTargetSize", "uu", "", method_set_target_size, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("SetEmbedQr", "b", "", method_set_embed_qr, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_VTABLE_END,

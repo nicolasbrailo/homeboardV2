@@ -40,6 +40,7 @@ int main(int argc, char *argv[]) {
   struct pp_cache_params params = {
       .ws = ws,
       .cache_depth = cfg.cache_depth,
+      .history_depth = cfg.history_depth,
       .dump_to_disk = cfg.dump_to_disk,
       .dump_dir = cfg.dump_dir,
   };

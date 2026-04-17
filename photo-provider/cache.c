@@ -32,10 +32,18 @@ struct pp_cache {
   // discards the result if the generation moved.
   uint32_t generation;
 
-  struct entry *ring;
-  uint32_t ring_cap;
-  uint32_t ring_head;
-  uint32_t ring_count;
+  // Single ring indexed by logical position mod buf_cap. Positions split
+  // into three ranges:
+  //   [head, cursor)   — history, replayable via pop_prev
+  //   cursor           — currently delivered photo (-1 if none delivered yet)
+  //   (cursor, tail)   — prefetched, not yet delivered
+  // Capacity = history_depth + 1 + prefetch_depth.
+  struct entry *buf;
+  uint32_t buf_cap;
+  uint32_t prefetch_depth;
+  int64_t head;
+  int64_t cursor;
+  int64_t tail;
 
   bool shutdown;
   pthread_t worker;
@@ -49,13 +57,14 @@ static void entry_close(struct entry *e) {
   e->meta = NULL;
 }
 
+static struct entry *slot(struct pp_cache *c, int64_t pos) { return &c->buf[(uint64_t)pos % c->buf_cap]; }
+
 static void flush_locked(struct pp_cache *c) {
-  for (uint32_t i = 0; i < c->ring_count; i++) {
-    uint32_t idx = (c->ring_head + i) % c->ring_cap;
-    entry_close(&c->ring[idx]);
-  }
-  c->ring_head = 0;
-  c->ring_count = 0;
+  for (int64_t i = c->head; i < c->tail; i++)
+    entry_close(slot(c, i));
+  c->head = 0;
+  c->tail = 0;
+  c->cursor = -1;
 }
 
 void pp_cache_invalidate(void *ud) {
@@ -97,12 +106,26 @@ static void dump_to_disk(struct pp_cache *c, int fd, const char *meta) {
   printf("Dumped photo #%d to %s\n", counter, c->dump_dir);
 }
 
+// True when prefetch is short of target AND the buffer has (or can make)
+// room. Room exists either directly (occupied < buf_cap) or by evicting
+// head — but evicting head is only safe when head < cursor, since head ==
+// cursor would evict the photo the consumer is currently looking at.
+static bool should_fetch_locked(const struct pp_cache *c) {
+  int64_t ahead = c->tail - c->cursor - 1;
+  if (ahead >= (int64_t)c->prefetch_depth)
+    return false;
+  int64_t occupied = c->tail - c->head;
+  if (occupied < (int64_t)c->buf_cap)
+    return true;
+  return c->head < c->cursor;
+}
+
 static void *worker_main(void *arg) {
   struct pp_cache *c = arg;
 
   pthread_mutex_lock(&c->mu);
   while (!c->shutdown) {
-    while (!c->shutdown && c->ring_count >= c->ring_cap)
+    while (!c->shutdown && !should_fetch_locked(c))
       pthread_cond_wait(&c->cv, &c->mu);
     if (c->shutdown)
       break;
@@ -127,11 +150,26 @@ static void *worker_main(void *arg) {
       free(meta);
       continue;
     }
+
+    // Evict head to make room. Stop before evicting the current photo.
+    while ((c->tail - c->head) >= (int64_t)c->buf_cap && c->head < c->cursor) {
+      entry_close(slot(c, c->head));
+      c->head++;
+    }
+    if ((c->tail - c->head) >= (int64_t)c->buf_cap) {
+      // Cursor moved back during the fetch — can't place without evicting
+      // something we'd need for pop_prev. Drop this fetch; we'll refetch
+      // on the next iteration once room opens up.
+      close(fd);
+      free(meta);
+      continue;
+    }
+
     dump_to_disk(c, fd, meta);
-    uint32_t tail = (c->ring_head + c->ring_count) % c->ring_cap;
-    c->ring[tail].fd = fd;
-    c->ring[tail].meta = meta;
-    c->ring_count++;
+    struct entry *e = slot(c, c->tail);
+    e->fd = fd;
+    e->meta = meta;
+    c->tail++;
     pthread_cond_broadcast(&c->cv);
   }
   flush_locked(c);
@@ -146,14 +184,19 @@ struct pp_cache *pp_cache_init(const struct pp_cache_params *p) {
   c->ws = p->ws;
   c->dump_to_disk = p->dump_to_disk;
   strncpy(c->dump_dir, p->dump_dir ? p->dump_dir : "", sizeof(c->dump_dir) - 1);
-  c->ring_cap = p->cache_depth ? p->cache_depth : 1;
-  c->ring = calloc(c->ring_cap, sizeof(*c->ring));
-  if (!c->ring) {
+  c->prefetch_depth = p->cache_depth ? p->cache_depth : 1;
+  c->buf_cap = p->history_depth + 1 + c->prefetch_depth;
+  c->buf = calloc(c->buf_cap, sizeof(*c->buf));
+  if (!c->buf) {
     free(c);
     return NULL;
   }
-  for (uint32_t i = 0; i < c->ring_cap; i++)
-    c->ring[i].fd = -1;
+  for (uint32_t i = 0; i < c->buf_cap; i++)
+    c->buf[i].fd = -1;
+  c->head = 0;
+  c->cursor = -1;
+  c->tail = 0;
+
   pthread_mutex_init(&c->mu, NULL);
   pthread_cond_init(&c->cv, NULL);
 
@@ -174,7 +217,7 @@ void pp_cache_free(struct pp_cache *c) {
     pthread_mutex_unlock(&c->mu);
     pthread_join(c->worker, NULL);
   }
-  free(c->ring);
+  free(c->buf);
   pthread_mutex_destroy(&c->mu);
   pthread_cond_destroy(&c->cv);
   free(c);
@@ -191,29 +234,46 @@ int pp_cache_pop(struct pp_cache *c, int *fd_out, char **meta_out, int timeout_m
   }
 
   pthread_mutex_lock(&c->mu);
-  while (c->ring_count == 0) {
+  while (c->cursor + 1 >= c->tail) {
     int r = pthread_cond_timedwait(&c->cv, &c->mu, &deadline);
     if (r == ETIMEDOUT) {
       pthread_mutex_unlock(&c->mu);
       return -1;
     }
   }
-  struct entry *e = &c->ring[c->ring_head];
-  int dup_fd = dup(e->fd);
-  char *meta = e->meta;
-  e->meta = NULL;
-  close(e->fd);
-  e->fd = -1;
-  c->ring_head = (c->ring_head + 1) % c->ring_cap;
-  c->ring_count--;
+  c->cursor++;
+  struct entry *e = slot(c, c->cursor);
+  int caller_fd = dup(e->fd);
+  char *caller_meta = e->meta ? strdup(e->meta) : NULL;
   pthread_cond_broadcast(&c->cv);
   pthread_mutex_unlock(&c->mu);
 
-  if (dup_fd < 0) {
-    free(meta);
+  if (caller_fd < 0) {
+    free(caller_meta);
     return -1;
   }
-  *fd_out = dup_fd;
-  *meta_out = meta;
+  *fd_out = caller_fd;
+  *meta_out = caller_meta;
+  return 0;
+}
+
+int pp_cache_pop_prev(struct pp_cache *c, int *fd_out, char **meta_out) {
+  pthread_mutex_lock(&c->mu);
+  if (c->cursor <= c->head) {
+    pthread_mutex_unlock(&c->mu);
+    return -1;
+  }
+  c->cursor--;
+  struct entry *e = slot(c, c->cursor);
+  int caller_fd = dup(e->fd);
+  char *caller_meta = e->meta ? strdup(e->meta) : NULL;
+  pthread_mutex_unlock(&c->mu);
+
+  if (caller_fd < 0) {
+    free(caller_meta);
+    return -1;
+  }
+  *fd_out = caller_fd;
+  *meta_out = caller_meta;
   return 0;
 }

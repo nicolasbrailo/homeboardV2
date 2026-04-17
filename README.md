@@ -52,6 +52,6 @@ This should verify the full dev cycle works (cross compile, deploy to target). T
 * Create a global target to install all dbus policies
 * Add announcement overlay (overlay text on top of picture, with timeout)
 * Add remote control with dbus + www
-* Add previous picture command
+* Use previous picture command from ambience service
 * Use sides of the display for info, eg weather service
 

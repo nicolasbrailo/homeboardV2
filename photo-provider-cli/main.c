@@ -17,9 +17,10 @@ static void usage(const char *argv0) {
   fprintf(stderr,
           "Usage:\n"
           "  %s <out.jpg>           fetch next photo, save to <out.jpg>, print metadata\n"
+          "  %s -prev <out.jpg>     fetch previous photo from history, save to <out.jpg>\n"
           "  %s -qr <0|1>           set embed-QR flag\n"
           "  %s -size <WxH>         set target size (eg. 1024x768)\n",
-          argv0, argv0, argv0);
+          argv0, argv0, argv0, argv0);
 }
 
 static int call_simple(sd_bus *bus, const char *method, const char *sig, ...) {
@@ -45,12 +46,12 @@ out:
   return r < 0 ? -1 : 0;
 }
 
-static int cmd_get_photo(sd_bus *bus, const char *out_path) {
+static int cmd_get_photo(sd_bus *bus, const char *method, const char *out_path) {
   sd_bus_error err = SD_BUS_ERROR_NULL;
   sd_bus_message *reply = NULL;
-  int r = sd_bus_call_method(bus, DBUS_SERVICE, DBUS_PATH, DBUS_INTERFACE, "GetPhoto", &err, &reply, "");
+  int r = sd_bus_call_method(bus, DBUS_SERVICE, DBUS_PATH, DBUS_INTERFACE, method, &err, &reply, "");
   if (r < 0) {
-    fprintf(stderr, "GetPhoto failed: %s\n", err.message ? err.message : strerror(-r));
+    fprintf(stderr, "%s failed: %s\n", method, err.message ? err.message : strerror(-r));
     sd_bus_error_free(&err);
     return -1;
   }
@@ -147,10 +148,16 @@ int main(int argc, char *argv[]) {
       goto out;
     }
     rc = call_simple(bus, "SetTargetSize", "uu", (uint32_t)w, (uint32_t)h) < 0 ? 1 : 0;
+  } else if (strcmp(argv[1], "-prev") == 0) {
+    if (argc != 3) {
+      usage(argv[0]);
+      goto out;
+    }
+    rc = cmd_get_photo(bus, "GetPrevPhoto", argv[2]) < 0 ? 1 : 0;
   } else if (argv[1][0] == '-') {
     usage(argv[0]);
   } else {
-    rc = cmd_get_photo(bus, argv[1]) < 0 ? 1 : 0;
+    rc = cmd_get_photo(bus, "GetPhoto", argv[1]) < 0 ? 1 : 0;
   }
 
 out:
