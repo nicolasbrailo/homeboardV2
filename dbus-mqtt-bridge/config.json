@@ -1,0 +1,9 @@
+{
+  "mqtt_host": "REPLACE_ME.lan",
+  "mqtt_port": 1883,
+  "mqtt_client_id": "homeboard-bridge",
+  "mqtt_user": "",
+  "mqtt_pass": "",
+  "mqtt_keepalive_s": 30,
+  "topic_prefix": "homeboard/"
+}

@@ -53,4 +53,5 @@ This should verify the full dev cycle works (cross compile, deploy to target). T
 * Add announcement overlay (overlay text on top of picture, with timeout)
 * Add remote control with dbus + www
 * Use sides of the display for info, eg weather service
+* Use journal for logging
 

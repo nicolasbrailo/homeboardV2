@@ -1,0 +1,19 @@
+#pragma once
+
+#include <stdbool.h>
+#include <stdint.h>
+#include <systemd/sd-bus.h>
+
+struct rc_dbus;
+
+typedef void (*rc_dbus_occupancy_cb)(bool occupied, uint32_t distance_cm, void *ud);
+
+struct rc_dbus *rc_dbus_init(rc_dbus_occupancy_cb on_occupancy, void *ud);
+void rc_dbus_free(struct rc_dbus *d);
+
+sd_bus *rc_dbus_bus(struct rc_dbus *d);
+
+int rc_dbus_ambience_call_void(struct rc_dbus *d, const char *method);
+int rc_dbus_ambience_set_transition_time(struct rc_dbus *d, uint32_t secs);
+int rc_dbus_photo_set_embed_qr(struct rc_dbus *d, bool on);
+int rc_dbus_photo_set_target_size(struct rc_dbus *d, uint32_t w, uint32_t h);
