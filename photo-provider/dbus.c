@@ -18,6 +18,21 @@ static sd_bus_slot *g_vtable_slot;
 static struct pp_cache *g_cache;
 static struct pp_www_session *g_ws;
 
+// The memfd is handed to the client via SCM_RIGHTS, which shares the open
+// file description (and thus the file offset) between sender and receiver.
+// A client that read the fd to EOF on a previous delivery leaves it there;
+// GetPrevPhoto re-serves that same memfd, and forward cases can in principle
+// hit the same issue if we ever reuse memfds. Rewind to 0 on the way out so
+// the API contract is "returned fd is ready to read from the top."
+static int reply_with_fd(sd_bus_message *m, sd_bus_error *err, int fd, const char *meta) {
+  if (lseek(fd, 0, SEEK_SET) < 0) {
+    int e = errno;
+    fprintf(stderr, "lseek(memfd): %s\n", strerror(e));
+    return sd_bus_error_set_errno(err, e);
+  }
+  return sd_bus_reply_method_return(m, "hs", fd, meta ? meta : "");
+}
+
 static int method_get_photo(sd_bus_message *m, void *ud, sd_bus_error *err) {
   (void)ud;
   int fd = -1;
@@ -25,7 +40,7 @@ static int method_get_photo(sd_bus_message *m, void *ud, sd_bus_error *err) {
   if (pp_cache_pop(g_cache, &fd, &meta, GET_PHOTO_TIMEOUT_MS) < 0)
     return sd_bus_error_set(err, "io.homeboard.PhotoProvider.Error.Unavailable", "no photo available");
 
-  int r = sd_bus_reply_method_return(m, "hs", fd, meta ? meta : "");
+  int r = reply_with_fd(m, err, fd, meta);
   close(fd); // dbus dup'd it; we drop ours
   free(meta);
   return r;
@@ -38,7 +53,7 @@ static int method_get_prev_photo(sd_bus_message *m, void *ud, sd_bus_error *err)
   if (pp_cache_pop_prev(g_cache, &fd, &meta) < 0)
     return sd_bus_error_set(err, "io.homeboard.PhotoProvider.Error.Unavailable", "no previous photo available");
 
-  int r = sd_bus_reply_method_return(m, "hs", fd, meta ? meta : "");
+  int r = reply_with_fd(m, err, fd, meta);
   close(fd);
   free(meta);
   return r;

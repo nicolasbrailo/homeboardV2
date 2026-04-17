@@ -29,6 +29,8 @@ static void on_display_turned_off(void *ud) { slideshow_stop((struct Slideshow *
 
 static void on_slideshow_next(void *ud) { slideshow_next(((struct ambience_ctx *)ud)->slideshow); }
 
+static void on_slideshow_prev(void *ud) { slideshow_prev(((struct ambience_ctx *)ud)->slideshow); }
+
 static void on_force_on(void *ud) { display_force_on(((struct ambience_ctx *)ud)->display); }
 
 static void on_force_off(void *ud) { display_force_off(((struct ambience_ctx *)ud)->display); }
@@ -73,7 +75,7 @@ int main(int argc, char *argv[]) {
       slideshow_init(bus, fb, &fbi, cfg.transition_time_s, cfg.rotation, cfg.embed_qr, cfg.use_eink_for_metadata);
   display = display_init(bus, on_display_turned_on, on_display_turned_off, slideshow);
   struct ambience_ctx ctx = {.slideshow = slideshow, .display = display};
-  dbus_mgr = ambience_dbus_init(bus, on_slideshow_next, on_force_on, on_force_off, &ctx);
+  dbus_mgr = ambience_dbus_init(bus, on_slideshow_next, on_slideshow_prev, on_force_on, on_force_off, &ctx);
   if (!slideshow || !display || !dbus_mgr) {
     ret = 1;
     goto end;

@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,11 +22,13 @@
 #define DBUS_PHOTO_PATH "/io/homeboard/PhotoProvider"
 #define DBUS_PHOTO_INTERFACE "io.homeboard.PhotoProvider1"
 
-// Lifecycle: start/stop/next are only ever called from the main (dbus
+// Lifecycle: start/stop/next/prev are only ever called from the main (dbus
 // dispatch) thread, so worker_running needs no synchronization. The worker
-// waits on wake_sem: stop() and next() both post it to cut the wait short.
-// stop_requested disambiguates: set before a stop post, clear otherwise.
-// sem_post is durable — if it fires while the worker is mid-fetch, the next
+// waits on wake_sem: stop(), next() and prev() all post it to cut the wait
+// short. stop_requested disambiguates stop; skip_count disambiguates
+// next-vs-prev: next() does +1, prev() does -1, and the worker reads the sign
+// at the top of each iteration to pick the fetch direction. sem_post is
+// durable — if it fires while the worker is mid-fetch, the next
 // sem_timedwait returns immediately.
 struct Slideshow {
   uint32_t *fb;
@@ -47,6 +50,7 @@ struct Slideshow {
   bool worker_running;
   sem_t wake_sem;
   bool stop_requested;
+  atomic_int skip_count;
 
   struct EinkMeta *eink_meta;
 };
@@ -67,22 +71,22 @@ static int connect_worker_bus(struct Slideshow *s) {
   return 0;
 }
 
-static int fetch_one(struct Slideshow *s, int *fd_out, char **meta_out) {
+static int fetch_one(struct Slideshow *s, const char *method, int *fd_out, char **meta_out) {
   sd_bus_error err = SD_BUS_ERROR_NULL;
   sd_bus_message *reply = NULL;
-  int r = sd_bus_call_method(s->worker_bus, DBUS_PHOTO_SERVICE, DBUS_PHOTO_PATH, DBUS_PHOTO_INTERFACE, "GetPhoto",
-                             &err, &reply, "");
+  int r = sd_bus_call_method(s->worker_bus, DBUS_PHOTO_SERVICE, DBUS_PHOTO_PATH, DBUS_PHOTO_INTERFACE, method, &err,
+                             &reply, "");
   if (r == -ENOTCONN) {
     sd_bus_error_free(&err);
     err = SD_BUS_ERROR_NULL;
-    fprintf(stderr, "GetPhoto: worker bus disconnected, reconnecting\n");
+    fprintf(stderr, "%s: worker bus disconnected, reconnecting\n", method);
     if (connect_worker_bus(s) < 0)
       return -1;
-    r = sd_bus_call_method(s->worker_bus, DBUS_PHOTO_SERVICE, DBUS_PHOTO_PATH, DBUS_PHOTO_INTERFACE, "GetPhoto", &err,
+    r = sd_bus_call_method(s->worker_bus, DBUS_PHOTO_SERVICE, DBUS_PHOTO_PATH, DBUS_PHOTO_INTERFACE, method, &err,
                            &reply, "");
   }
   if (r < 0) {
-    fprintf(stderr, "GetPhoto failed: %s\n", err.message ? err.message : strerror(-r));
+    fprintf(stderr, "%s failed: %s\n", method, err.message ? err.message : strerror(-r));
     sd_bus_error_free(&err);
     return -1;
   }
@@ -91,7 +95,7 @@ static int fetch_one(struct Slideshow *s, int *fd_out, char **meta_out) {
   const char *meta = NULL;
   r = sd_bus_message_read(reply, "hs", &fd, &meta);
   if (r < 0) {
-    fprintf(stderr, "bad GetPhoto reply: %s\n", strerror(-r));
+    fprintf(stderr, "bad %s reply: %s\n", method, strerror(-r));
     sd_bus_message_unref(reply);
     return -1;
   }
@@ -99,6 +103,18 @@ static int fetch_one(struct Slideshow *s, int *fd_out, char **meta_out) {
   int dup_fd = dup(fd);
   if (dup_fd < 0) {
     perror("dup");
+    sd_bus_message_unref(reply);
+    return -1;
+  }
+
+  // photo-provider ships the fd over SCM_RIGHTS, so sender and receiver share
+  // one open file description (and thus the file offset). GetPrevPhoto re-
+  // serves a memfd we already read to EOF last time it was on screen; rewind
+  // before handing to libjpeg. Harmless for forward fetches (fresh memfds
+  // are at 0 already).
+  if (lseek(dup_fd, 0, SEEK_SET) < 0) {
+    perror("lseek");
+    close(dup_fd);
     sd_bus_message_unref(reply);
     return -1;
   }
@@ -145,9 +161,17 @@ static bool wait_or_stop(struct Slideshow *s, uint32_t secs) {
 static void *worker_main(void *ud) {
   struct Slideshow *s = ud;
   for (;;) {
+    // Collapse any queued next/prev presses into a single step. Drain the sem FIRST so that
+    // every post we observe (including the one that woke us) has already
+    // committed its skip_count update, then read the counter.
+    while (sem_trywait(&s->wake_sem) == 0) {
+    }
+    int skip = atomic_exchange(&s->skip_count, 0);
+    const char *method = (skip < 0) ? "GetPrevPhoto" : "GetPhoto";
+
     int fd = -1;
     char *meta = NULL;
-    if (fetch_one(s, &fd, &meta) == 0) {
+    if (fetch_one(s, method, &fd, &meta) == 0) {
       printf("Displaying new picture\n");
       render_meta(s, meta);
       render_fd(s, fd);
@@ -188,7 +212,7 @@ static int push_initial_config(sd_bus *bus, uint32_t w, uint32_t h, bool embed_q
 
 static void on_photo_svc_updown(void *ud, bool up) {
   if (!up) {
-    fprintf(stderr, "WARNING: Occupancy service is down, assuming no presence (and slideshow will shutdown)\n");
+    fprintf(stderr, "WARNING: Photo service is down, slideshow will freeze on current picture\n");
     return;
   }
 
@@ -221,6 +245,7 @@ struct Slideshow *slideshow_init(sd_bus *bus, uint32_t *fb, const struct fb_info
     free(s);
     return NULL;
   }
+  atomic_init(&s->skip_count, 0);
   if (connect_worker_bus(s) < 0) {
     sem_destroy(&s->wake_sem);
     free(s);
@@ -291,12 +316,21 @@ void slideshow_stop(struct Slideshow *s) {
   // next start() begins with a clean wait.
   while (sem_trywait(&s->wake_sem) == 0) {
   }
+  atomic_store(&s->skip_count, 0);
 }
 
 void slideshow_next(struct Slideshow *s) {
-  printf("User requested to advance to the next picture\n");
   if (!s->worker_running)
     return;
-  printf("Advancing slideshow\n");
+  printf("User requested to advance to the next picture\n");
+  atomic_fetch_add(&s->skip_count, 1);
+  sem_post(&s->wake_sem);
+}
+
+void slideshow_prev(struct Slideshow *s) {
+  if (!s->worker_running)
+    return;
+  printf("User requested to step back to the previous picture\n");
+  atomic_fetch_sub(&s->skip_count, 1);
   sem_post(&s->wake_sem);
 }

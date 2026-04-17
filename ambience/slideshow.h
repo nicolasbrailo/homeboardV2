@@ -25,3 +25,8 @@ void slideshow_stop(struct Slideshow *s);
 // Advance to the next picture immediately, cutting short the current wait.
 // No-op when the worker is stopped.
 void slideshow_next(struct Slideshow *s);
+
+// Step back to the previous picture immediately. If no prior photo is held by
+// photo-provider the request is dropped (the current picture stays on screen).
+// No-op when the worker is stopped.
+void slideshow_prev(struct Slideshow *s);

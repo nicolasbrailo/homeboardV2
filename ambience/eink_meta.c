@@ -45,6 +45,19 @@ void eink_meta_render(struct EinkMeta *em, const char *meta_json) {
     return;
   }
 
+  {
+    struct json_object *obj = NULL;
+    if (json_object_object_get_ex(root, "local_path", &obj)) {
+      printf("Displaying metadata for %s\n", json_object_get_string(obj));
+    } else if (json_object_object_get_ex(root, "albumpath", &obj)) {
+      printf("Displaying metadata for %s", json_object_get_string(obj));
+      if (json_object_object_get_ex(root, "filename", &obj)) {
+        printf("%s", json_object_get_string(obj));
+      }
+      printf("\n");
+    }
+  }
+
   const char *city = NULL;
   struct json_object *revgeo = NULL;
   if (json_object_object_get_ex(root, "reverse_geo", &revgeo)) {
@@ -71,7 +84,6 @@ void eink_meta_render(struct EinkMeta *em, const char *meta_json) {
   else
     snprintf(text, sizeof(text), "?");
 
-  printf("Displaing new picture: %s\n", meta_json);
   if (strcmp(text, em->last_text) == 0) {
     json_object_put(root);
     return;
