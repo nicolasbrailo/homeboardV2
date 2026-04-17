@@ -1,10 +1,13 @@
 #pragma once
 
+#include <stdbool.h>
+#include <stdint.h>
 #include <systemd/sd-bus.h>
 
 typedef void (*ambience_next_cb)(void *);
 typedef void (*ambience_prev_cb)(void *);
 typedef void (*ambience_force_cb)(void *);
+typedef bool (*ambience_set_transition_time_cb)(void *, uint32_t);
 
 struct AmbienceDbus;
 
@@ -12,7 +15,8 @@ struct AmbienceDbus;
 // and must outlive the AmbienceDbus). All callbacks are invoked from the bus
 // dispatch loop and share the same `ud`.
 struct AmbienceDbus *ambience_dbus_init(sd_bus *bus, ambience_next_cb on_next, ambience_prev_cb on_prev,
-                                        ambience_force_cb on_force_on, ambience_force_cb on_force_off, void *ud);
+                                        ambience_force_cb on_force_on, ambience_force_cb on_force_off,
+                                        ambience_set_transition_time_cb on_set_transition_time, void *ud);
 void ambience_dbus_free(struct AmbienceDbus *d);
 
 // Process pending messages and block until new activity (or a signal).

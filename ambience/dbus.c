@@ -17,6 +17,7 @@ struct AmbienceDbus {
   ambience_prev_cb on_prev;
   ambience_force_cb on_force_on;
   ambience_force_cb on_force_off;
+  ambience_set_transition_time_cb on_set_transition_time;
   void *ud;
 };
 
@@ -48,17 +49,32 @@ static int method_force_off(sd_bus_message *m, void *userdata, sd_bus_error *err
   return sd_bus_reply_method_return(m, NULL);
 }
 
+static int method_set_transition_time(sd_bus_message *m, void *userdata, sd_bus_error *err) {
+  struct AmbienceDbus *d = userdata;
+  uint32_t seconds = 0;
+  int r = sd_bus_message_read(m, "u", &seconds);
+  if (r < 0)
+    return r;
+  if (!d->on_set_transition_time(d->ud, seconds)) {
+    sd_bus_error_setf(err, SD_BUS_ERROR_INVALID_ARGS, "invalid transition time %u", seconds);
+    return -EINVAL;
+  }
+  return sd_bus_reply_method_return(m, NULL);
+}
+
 static const sd_bus_vtable g_vtable[] = {
     SD_BUS_VTABLE_START(0),
     SD_BUS_METHOD("Next", "", "", method_next, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("Prev", "", "", method_prev, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("ForceSlideshowOn", "", "", method_force_on, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("ForceSlideshowOff", "", "", method_force_off, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("SetTransitionTimeSecs", "u", "", method_set_transition_time, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_VTABLE_END,
 };
 
 struct AmbienceDbus *ambience_dbus_init(sd_bus *bus, ambience_next_cb on_next, ambience_prev_cb on_prev,
-                                        ambience_force_cb on_force_on, ambience_force_cb on_force_off, void *ud) {
+                                        ambience_force_cb on_force_on, ambience_force_cb on_force_off,
+                                        ambience_set_transition_time_cb on_set_transition_time, void *ud) {
   if (!bus)
     return NULL;
   struct AmbienceDbus *d = calloc(1, sizeof(*d));
@@ -69,6 +85,7 @@ struct AmbienceDbus *ambience_dbus_init(sd_bus *bus, ambience_next_cb on_next, a
   d->on_prev = on_prev;
   d->on_force_on = on_force_on;
   d->on_force_off = on_force_off;
+  d->on_set_transition_time = on_set_transition_time;
   d->ud = ud;
 
   int r = sd_bus_add_object_vtable(d->bus, &d->vtable_slot, DBUS_PATH, DBUS_INTERFACE, g_vtable, d);

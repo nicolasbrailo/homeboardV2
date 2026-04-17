@@ -35,6 +35,10 @@ static void on_force_on(void *ud) { display_force_on(((struct ambience_ctx *)ud)
 
 static void on_force_off(void *ud) { display_force_off(((struct ambience_ctx *)ud)->display); }
 
+static bool on_set_transition_time(void *ud, uint32_t seconds) {
+  return slideshow_set_transition_time_s(((struct ambience_ctx *)ud)->slideshow, seconds);
+}
+
 int main(int argc, char *argv[]) {
   if (argc < 2) {
     fprintf(stderr, "Usage: %s <config.json>\n", argv[0]);
@@ -75,7 +79,8 @@ int main(int argc, char *argv[]) {
       slideshow_init(bus, fb, &fbi, cfg.transition_time_s, cfg.rotation, cfg.embed_qr, cfg.use_eink_for_metadata);
   display = display_init(bus, on_display_turned_on, on_display_turned_off, slideshow);
   struct ambience_ctx ctx = {.slideshow = slideshow, .display = display};
-  dbus_mgr = ambience_dbus_init(bus, on_slideshow_next, on_slideshow_prev, on_force_on, on_force_off, &ctx);
+  dbus_mgr = ambience_dbus_init(bus, on_slideshow_next, on_slideshow_prev, on_force_on, on_force_off,
+                                on_set_transition_time, &ctx);
   if (!slideshow || !display || !dbus_mgr) {
     ret = 1;
     goto end;

@@ -30,3 +30,8 @@ void slideshow_next(struct Slideshow *s);
 // photo-provider the request is dropped (the current picture stays on screen).
 // No-op when the worker is stopped.
 void slideshow_prev(struct Slideshow *s);
+
+// Update the wait between pictures. The change takes effect at the next cycle;
+// a sleep already in progress is not interrupted. Returns false if `seconds`
+// is outside the supported range.
+bool slideshow_set_transition_time_s(struct Slideshow *s, uint32_t seconds);

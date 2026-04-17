@@ -33,7 +33,7 @@
 struct Slideshow {
   uint32_t *fb;
   struct fb_info fbi;
-  uint32_t transition_time_s;
+  atomic_uint transition_time_s;
   enum rotation rotation;
   uint32_t target_w;
   uint32_t target_h;
@@ -178,7 +178,7 @@ static void *worker_main(void *ud) {
       close(fd);
       free(meta);
     }
-    if (wait_or_stop(s, s->transition_time_s))
+    if (wait_or_stop(s, atomic_load(&s->transition_time_s)))
       break;
   }
   return NULL;
@@ -238,7 +238,7 @@ struct Slideshow *slideshow_init(sd_bus *bus, uint32_t *fb, const struct fb_info
     return NULL;
   s->fb = fb;
   s->fbi = *fbi;
-  s->transition_time_s = transition_time_s;
+  atomic_init(&s->transition_time_s, transition_time_s);
   s->rotation = (enum rotation)rotation_deg;
   if (sem_init(&s->wake_sem, 0, 0) != 0) {
     perror("sem_init");
@@ -333,4 +333,14 @@ void slideshow_prev(struct Slideshow *s) {
   printf("User requested to step back to the previous picture\n");
   atomic_fetch_sub(&s->skip_count, 1);
   sem_post(&s->wake_sem);
+}
+
+bool slideshow_set_transition_time_s(struct Slideshow *s, uint32_t seconds) {
+  if (seconds < 3 || seconds > 300) {
+    fprintf(stderr, "slideshow_set_transition_time_s: invalid transition time %u, must be [3, 300]\n", seconds);
+    return false;
+  }
+  atomic_store(&s->transition_time_s, seconds);
+  printf("Transition time updated to %u seconds\n", seconds);
+  return true;
 }

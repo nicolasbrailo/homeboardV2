@@ -14,9 +14,10 @@ D-Bus interface for manual control.
 - Runs a background worker that pulls photos from `photo-provider` and renders
   them at the configured interval with optional rotation and QR-code overlay.
 - Exposes `io.homeboard.Ambience1` for external triggers (buttons,
-  automations): `Next()` to skip to the next picture, and
+  automations): `Next()` to skip to the next picture, `Prev()` for previous, and
   `ForceSlideshowOn()` / `ForceSlideshowOff()` to override the occupancy
   gate until the next real occupancy report arrives.
+- Transition time between pictures can be configured over dbus with `SetTransitionTimeSecs`
 
 ## Dependencies
 

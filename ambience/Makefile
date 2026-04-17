@@ -26,8 +26,16 @@ deploy-dbus-policy: $(DBUS_POLICY)
 	scp $(DBUS_POLICY) $(DEPLOY_TGT_HOST):/tmp/$(DBUS_POLICY)
 	$(SSH) 'sudo -S install -m 644 -o root -g root /tmp/$(DBUS_POLICY) $(DBUS_POLICY_DIR)/$(DBUS_POLICY) && rm /tmp/$(DBUS_POLICY) && sudo systemctl reload dbus'
 
-next:
+tgt-next:
 	$(SSH) 'busctl --system call io.homeboard.Ambience /io/homeboard/Ambience io.homeboard.Ambience1 Next'
+tgt-prev:
+	$(SSH) 'busctl --system call io.homeboard.Ambience /io/homeboard/Ambience io.homeboard.Ambience1 Prev'
+tgt-force-on:
+	$(SSH) 'busctl --system call io.homeboard.Ambience /io/homeboard/Ambience io.homeboard.Ambience1 ForceSlideshowOn'
+tgt-force-off:
+	$(SSH) 'busctl --system call io.homeboard.Ambience /io/homeboard/Ambience io.homeboard.Ambience1 ForceSlideshowOff'
+tgt-set-transition-time:
+	$(SSH) 'busctl --system call io.homeboard.Ambience /io/homeboard/Ambience io.homeboard.Ambience1 SetTransitionTimeSecs u 5'
 
 install_sysroot_deps:
 	@# Jpeg render deps
