@@ -51,11 +51,36 @@ struct Slideshow {
   struct EinkMeta *eink_meta;
 };
 
-static int fetch_one(sd_bus *bus, int *fd_out, char **meta_out) {
+// (Re)open the worker's private system-bus connection. Closes any existing
+// connection first so callers can use this both for initial connect and for
+// recovery after the bus drops (e.g. dbus-daemon restart → ENOTCONN).
+static int connect_worker_bus(struct Slideshow *s) {
+  if (s->worker_bus) {
+    sd_bus_flush_close_unref(s->worker_bus);
+    s->worker_bus = NULL;
+  }
+  int r = sd_bus_open_system(&s->worker_bus);
+  if (r < 0) {
+    fprintf(stderr, "slideshow: sd_bus_open_system: %s\n", strerror(-r));
+    return -1;
+  }
+  return 0;
+}
+
+static int fetch_one(struct Slideshow *s, int *fd_out, char **meta_out) {
   sd_bus_error err = SD_BUS_ERROR_NULL;
   sd_bus_message *reply = NULL;
-  int r =
-      sd_bus_call_method(bus, DBUS_PHOTO_SERVICE, DBUS_PHOTO_PATH, DBUS_PHOTO_INTERFACE, "GetPhoto", &err, &reply, "");
+  int r = sd_bus_call_method(s->worker_bus, DBUS_PHOTO_SERVICE, DBUS_PHOTO_PATH, DBUS_PHOTO_INTERFACE, "GetPhoto",
+                             &err, &reply, "");
+  if (r == -ENOTCONN) {
+    sd_bus_error_free(&err);
+    err = SD_BUS_ERROR_NULL;
+    fprintf(stderr, "GetPhoto: worker bus disconnected, reconnecting\n");
+    if (connect_worker_bus(s) < 0)
+      return -1;
+    r = sd_bus_call_method(s->worker_bus, DBUS_PHOTO_SERVICE, DBUS_PHOTO_PATH, DBUS_PHOTO_INTERFACE, "GetPhoto", &err,
+                           &reply, "");
+  }
   if (r < 0) {
     fprintf(stderr, "GetPhoto failed: %s\n", err.message ? err.message : strerror(-r));
     sd_bus_error_free(&err);
@@ -122,7 +147,7 @@ static void *worker_main(void *ud) {
   for (;;) {
     int fd = -1;
     char *meta = NULL;
-    if (fetch_one(s->worker_bus, &fd, &meta) == 0) {
+    if (fetch_one(s, &fd, &meta) == 0) {
       printf("Displaying new picture\n");
       render_meta(s, meta);
       render_fd(s, fd);
@@ -196,9 +221,7 @@ struct Slideshow *slideshow_init(sd_bus *bus, uint32_t *fb, const struct fb_info
     free(s);
     return NULL;
   }
-  int r = sd_bus_open_system(&s->worker_bus);
-  if (r < 0) {
-    fprintf(stderr, "slideshow: sd_bus_open_system: %s\n", strerror(-r));
+  if (connect_worker_bus(s) < 0) {
     sem_destroy(&s->wake_sem);
     free(s);
     return NULL;
