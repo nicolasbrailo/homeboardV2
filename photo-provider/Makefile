@@ -17,9 +17,6 @@ install_sysroot_deps:
 	../rpiz-xcompile/add_sysroot_pkg.sh ~/src/xcomp-rpiz-env http://raspbian.raspberrypi.com/raspbian/pool/main/c/curl/libcurl4_7.88.1-10+rpi1+deb12u14_armhf.deb
 	../rpiz-xcompile/add_sysroot_pkg.sh ~/src/xcomp-rpiz-env http://raspbian.raspberrypi.com/raspbian/pool/main/c/curl/libcurl4-openssl-dev_7.88.1-10+rpi1+deb12u14_armhf.deb
 
-deploy-config: config.json
-	scp config.json $(DEPLOY_TGT_HOST):$(DEPLOY_TGT_DIR)/$(BIN_NAME).json
-
 deploy-dbus-policy: $(DBUS_POLICY)
 	scp $(DBUS_POLICY) $(DEPLOY_TGT_HOST):/tmp/$(DBUS_POLICY)
 	$(SSH) 'sudo -S install -m 644 -o root -g root /tmp/$(DBUS_POLICY) $(DBUS_POLICY_DIR)/$(DBUS_POLICY) && rm /tmp/$(DBUS_POLICY) && sudo systemctl reload dbus'

@@ -16,9 +16,6 @@ install_sysroot_deps:
 	../rpiz-xcompile/add_sysroot_pkg.sh ~/src/xcomp-rpiz-env http://raspbian.raspberrypi.com/raspbian/pool/main/s/systemd/libsystemd-dev_252.39-1~deb12u1+rpi1_armhf.deb
 	../rpiz-xcompile/add_sysroot_pkg.sh ~/src/xcomp-rpiz-env http://raspbian.raspberrypi.com/raspbian/pool/main/libc/libcap2/libcap-dev_2.66-4+deb12u2_armhf.deb
 
-deploy-config: config.json
-	scp config.json $(DEPLOY_TGT_HOST):$(DEPLOY_TGT_DIR)/$(BIN_NAME).json
-
 DBUS_POLICY = io.homeboard.Occupancy.conf
 DBUS_POLICY_DIR = /etc/dbus-1/system.d
 

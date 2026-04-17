@@ -65,4 +65,7 @@ build/$(BIN_NAME): $(OBJS)
 
 deploy: build/$(BIN_NAME)
 	scp ./build/$(BIN_NAME) $(DEPLOY_TGT_HOST):$(DEPLOY_TGT_DIR)
+deploy-config: config.json
+	scp config.json $(DEPLOY_TGT_HOST):$(DEPLOY_TGT_DIR)/$(BIN_NAME).json
+
 
