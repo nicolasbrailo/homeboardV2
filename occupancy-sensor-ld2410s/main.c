@@ -71,6 +71,9 @@ static int load_config(const char *path, struct config *cfg) {
   strncpy(cfg->sensor.device, "/dev/ttyUSB0", sizeof(cfg->sensor.device));
   cfg->sensor.debug = false;
   cfg->sensor.sensor_report_gpio = -1;
+  cfg->sensor.startup_delay_secs = 10;
+  cfg->sensor.hysteresis_occupied = 3;
+  cfg->sensor.hysteresis_vacant = 3;
   cfg->cal_trigger = 2;
   cfg->cal_retention = 1;
   cfg->cal_duration = 120;
@@ -84,6 +87,12 @@ static int load_config(const char *path, struct config *cfg) {
     cfg->sensor.debug = json_object_get_boolean(val);
   if (json_object_object_get_ex(root, "sensor_report_gpio", &val))
     cfg->sensor.sensor_report_gpio = json_object_get_int(val);
+  if (json_object_object_get_ex(root, "startup_delay_secs", &val))
+    cfg->sensor.startup_delay_secs = (unsigned)json_object_get_int(val);
+  if (json_object_object_get_ex(root, "hysteresis_occupied", &val))
+    cfg->sensor.hysteresis_occupied = (unsigned)json_object_get_int(val);
+  if (json_object_object_get_ex(root, "hysteresis_vacant", &val))
+    cfg->sensor.hysteresis_vacant = (unsigned)json_object_get_int(val);
   if (json_object_object_get_ex(root, "calibration_trigger", &val))
     cfg->cal_trigger = (uint16_t)json_object_get_int(val);
   if (json_object_object_get_ex(root, "calibration_retention", &val))

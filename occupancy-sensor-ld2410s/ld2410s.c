@@ -17,6 +17,10 @@ struct LD2410S {
   atomic_bool uart_occupied;
   atomic_uint uart_distance;
 
+  unsigned startup_delay_secs;
+  unsigned hysteresis_occupied;
+  unsigned hysteresis_vacant;
+
   ld2410s_state_change_cb state_cb;
   void *state_cb_ud;
 
@@ -38,9 +42,12 @@ static void on_uart_calibration_progress(uint16_t progress, void *ud) {
 
 static void *poller_thread(void *arg) {
   struct LD2410S *s = arg;
-  bool last_occupied = false;
-  uint16_t last_distance = 0;
-  bool first = true;
+  bool last_emitted_occupied = false;
+  uint16_t last_emitted_distance = 0;
+  bool emitted_first = false;
+  bool pending_state = false;
+  unsigned pending_count = 0;
+  unsigned ticks = 0;
 
   while (!atomic_load_explicit(&s->stop, memory_order_relaxed)) {
     bool gpio_occ = false;
@@ -51,14 +58,41 @@ static void *poller_thread(void *arg) {
     uint16_t distance = (uint16_t)atomic_load_explicit(&s->uart_distance, memory_order_relaxed);
     bool occupied = gpio_occ || uart_occ;
 
-    if (first || occupied != last_occupied || distance != last_distance) {
-      first = false;
-      last_occupied = occupied;
-      last_distance = distance;
-      if (s->state_cb)
+    if (!emitted_first) {
+      if (ticks >= s->startup_delay_secs) {
+        emitted_first = true;
+        last_emitted_occupied = occupied;
+        last_emitted_distance = distance;
+        pending_state = occupied;
+        pending_count = 1;
         s->state_cb(occupied, distance, s->state_cb_ud);
+      }
+    } else {
+      if (occupied == pending_state) {
+        pending_count++;
+      } else {
+        pending_state = occupied;
+        pending_count = 1;
+      }
+
+      unsigned threshold = occupied ? s->hysteresis_occupied : s->hysteresis_vacant;
+      if (threshold == 0)
+        threshold = 1;
+
+      if (occupied != last_emitted_occupied && pending_count >= threshold) {
+        // There's been an occupancy state change, announce
+        last_emitted_occupied = occupied;
+        last_emitted_distance = distance;
+        s->state_cb(occupied, distance, s->state_cb_ud);
+      } else if (occupied == last_emitted_occupied && distance != last_emitted_distance) {
+        // There's been no occupancy state change, but there is a distance change. Only announce
+        // if we are in a stable state, ie not waiting for the hysteresis period
+        last_emitted_distance = distance;
+        s->state_cb(occupied, distance, s->state_cb_ud);
+      }
     }
 
+    ticks++;
     sleep(1);
   }
   return NULL;
@@ -73,8 +107,15 @@ struct LD2410S *ld2410s_init(const struct LD2410S_config *cfg, ld2410s_state_cha
   struct LD2410S *s = calloc(1, sizeof(*s));
   if (!s)
     return NULL;
+  if (!cb) {
+    fprintf(stderr, "No occupancy callback, nothing to do\n");
+    return NULL;
+  }
 
   s->gpio_pin = cfg->sensor_report_gpio;
+  s->startup_delay_secs = cfg->startup_delay_secs;
+  s->hysteresis_occupied = cfg->hysteresis_occupied ? cfg->hysteresis_occupied : 1;
+  s->hysteresis_vacant = cfg->hysteresis_vacant ? cfg->hysteresis_vacant : 1;
   s->state_cb = cb;
   s->state_cb_ud = user_data;
   atomic_init(&s->uart_occupied, false);

@@ -12,6 +12,9 @@ struct LD2410S_config {
   char device[64];
   bool debug;
   int sensor_report_gpio; /* -1 disables GPIO */
+  unsigned startup_delay_secs;
+  unsigned hysteresis_occupied;
+  unsigned hysteresis_vacant;
 };
 
 typedef void (*ld2410s_state_change_cb)(bool occupied, uint16_t distance, void *user_data);

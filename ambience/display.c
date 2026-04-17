@@ -93,7 +93,6 @@ static int on_occupancy_state_changed(sd_bus_message *m, void *userdata, sd_bus_
   display->last_occupancy_report.occupied = occupied;
   display->last_occupancy_report.distance = (int)distance;
   update_display_state(display);
-  // TODO: Add some hysteresis to occupancy service?
   return 0;
 }
 

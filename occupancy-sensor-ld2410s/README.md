@@ -12,7 +12,9 @@ script stays as an interactive debugger; this service is the production daemon.
 - Reads occupancy + distance over UART (115200 baud binary protocol)
 - Optionally reads a simple occupancy boolean from a GPIO pin, OR-combined with
   the UART signal so either interface can trigger "occupied"
-- State-change callbacks only — no spam when nothing changes
+- Configurable startup grace period (first event held for N seconds, then
+  forced) and per-direction hysteresis on occupancy transitions; distance
+  updates emit only during a committed/stable occupancy period
 - Broadcasts `io.homeboard.Occupancy1.StateChanged(b occupied, u distance)` on
   the system D-Bus
 - Auto-calibration at 03:00 each day (only fires once the room has been vacant
