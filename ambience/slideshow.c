@@ -342,6 +342,8 @@ void slideshow_stop(struct Slideshow *s) {
   while (sem_trywait(&s->wake_sem) == 0) {
   }
   atomic_store(&s->skip_count, 0);
+  if (s->eink_meta)
+    eink_meta_clear(s->eink_meta);
 }
 
 void slideshow_next(struct Slideshow *s) {
