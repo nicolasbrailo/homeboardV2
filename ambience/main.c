@@ -100,7 +100,7 @@ int main(int argc, char *argv[]) {
 
   struct ambience_ctx ctx = {.bus = bus};
   slideshow = slideshow_init(bus, fb, &fbi, cfg.transition_time_s, cfg.rotation, cfg.embed_qr,
-                             cfg.use_eink_for_metadata, on_overlay, NULL);
+                             cfg.use_eink_for_metadata, cfg.fallback_image, on_overlay, NULL);
   ctx.slideshow = slideshow;
   display = display_init(bus, on_display_turned_on, on_display_turned_off, &ctx);
   ctx.display = display;

@@ -27,9 +27,12 @@ typedef void (*slideshow_overlay_fn)(void *ud, uint32_t *buf, uint32_t width, ui
 // `bus` is borrowed; owned by the caller and must outlive the slideshow.
 // `overlay_cb` may be NULL for no overlay. `overlay_ud` is passed through.
 // Initially stopped.
+// `fallback_image` is a JPEG path rendered once during init to cover the gap
+// between startup and the first photo arriving. NULL or empty leaves the
+// framebuffer untouched.
 struct Slideshow *slideshow_init(sd_bus *bus, uint32_t *fb, const struct fb_info *fbi, uint32_t transition_time_s,
                                  uint32_t rotation_deg, bool embed_qr, bool use_eink_for_metadata,
-                                 slideshow_overlay_fn overlay_cb, void *overlay_ud);
+                                 const char *fallback_image, slideshow_overlay_fn overlay_cb, void *overlay_ud);
 
 // Free the slideshow. Stops the worker if running.
 void slideshow_free(struct Slideshow *s);

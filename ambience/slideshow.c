@@ -61,6 +61,10 @@ struct Slideshow {
   atomic_int skip_count;
 
   struct EinkMeta *eink_meta;
+
+  // Shown at startup and any time we fail to fetch/decode a photo so the
+  // screen never goes blank. NULL when disabled in config.
+  char *fallback_image;
 };
 
 // (Re)open the worker's private system-bus connection. Closes any existing
@@ -138,11 +142,11 @@ static void render_meta(struct Slideshow *s, char *meta) {
     eink_meta_render(s->eink_meta, meta);
 }
 
-static void render_fd(struct Slideshow *s, int fd) {
+static bool render_fd(struct Slideshow *s, int fd) {
   struct jpeg_image *img = jpeg_load_fd(fd, s->fbi.width, s->fbi.height);
   if (!img) {
     fprintf(stderr, "jpeg decode failed\n");
-    return;
+    return false;
   }
   img_render(s->compose_buf, s->fbi.width, s->fbi.height, s->fbi.stride, img->pixels, img->width, img->height,
              s->rotation, INTERP_BILINEAR);
@@ -150,6 +154,22 @@ static void render_fd(struct Slideshow *s, int fd) {
   if (s->overlay_cb)
     s->overlay_cb(s->overlay_ud, s->compose_buf, s->fbi.width, s->fbi.height, s->fbi.stride, s->rotation);
   memcpy(s->fb, s->compose_buf, s->compose_buf_size);
+  return true;
+}
+
+static void render_fallback(struct Slideshow *s) {
+  if (!s->fallback_image)
+    return;
+  struct jpeg_image *img = jpeg_load(s->fallback_image, s->fbi.width, s->fbi.height);
+  if (!img) {
+    fprintf(stderr, "fallback image decode failed: %s\n", s->fallback_image);
+    return;
+  }
+  img_render(s->compose_buf, s->fbi.width, s->fbi.height, s->fbi.stride, img->pixels, img->width, img->height,
+             s->rotation, INTERP_BILINEAR);
+  jpeg_free(img);
+  memcpy(s->fb, s->compose_buf, s->compose_buf_size);
+  printf("Rendered fallback image: %s\n", s->fallback_image);
 }
 
 // Returns true if stop was requested, false on timeout or next-request.
@@ -185,10 +205,15 @@ static void *worker_main(void *ud) {
     if (fetch_one(s, method, &fd, &meta) == 0) {
       printf("Displaying new picture\n");
       render_meta(s, meta);
-      render_fd(s, fd);
+      if (render_fd(s, fd)) {
+        ambience_dbus_emit_displaying_photo(s->worker_bus, meta);
+      } else {
+        render_fallback(s);
+      }
       close(fd);
-      ambience_dbus_emit_displaying_photo(s->worker_bus, meta);
       free(meta);
+    } else {
+      render_fallback(s);
     }
     if (wait_or_stop(s, atomic_load(&s->transition_time_s)))
       break;
@@ -236,7 +261,7 @@ static void on_photo_svc_updown(void *ud, bool up) {
 
 struct Slideshow *slideshow_init(sd_bus *bus, uint32_t *fb, const struct fb_info *fbi, uint32_t transition_time_s,
                                  uint32_t rotation_deg, bool embed_qr, bool use_eink_for_metadata,
-                                 slideshow_overlay_fn overlay_cb, void *overlay_ud) {
+                                 const char *fallback_image, slideshow_overlay_fn overlay_cb, void *overlay_ud) {
   if (!bus || !fb || !fbi || transition_time_s == 0)
     return NULL;
   if (rotation_deg != 0 && rotation_deg != 90 && rotation_deg != 180 && rotation_deg != 270) {
@@ -291,6 +316,11 @@ struct Slideshow *slideshow_init(sd_bus *bus, uint32_t *fb, const struct fb_info
       fprintf(stderr, "WARNING: eink metadata display unavailable\n");
   }
 
+  if (fallback_image && fallback_image[0] != '\0') {
+    s->fallback_image = strdup(fallback_image);
+    render_fallback(s);
+  }
+
   s->photo_svc_monitor = on_service_updown(s->bus, DBUS_PHOTO_SERVICE, on_photo_svc_updown, s);
   if (!is_service_up(s->bus, DBUS_PHOTO_SERVICE)) {
     fprintf(stderr, "WARNING: %s is not running; photos can't be displayed until it starts.\n", DBUS_PHOTO_SERVICE);
@@ -300,6 +330,7 @@ struct Slideshow *slideshow_init(sd_bus *bus, uint32_t *fb, const struct fb_info
     // We'll retry if the service comes up later, but warn the user
     fprintf(stderr, "WARNING: Failed to config photo provider service '%s'.\n", DBUS_PHOTO_SERVICE);
   }
+
   return s;
 }
 
@@ -314,6 +345,7 @@ void slideshow_free(struct Slideshow *s) {
     sd_bus_flush_close_unref(s->worker_bus);
   eink_meta_free(s->eink_meta);
   free(s->compose_buf);
+  free(s->fallback_image);
   free(s);
 }
 

@@ -1,6 +1,7 @@
 {
   "transition_time_s": 30,
   "rotation": 180,
-  "embed_qr": true,
-  "use_eink_for_metadata": true
+  "embed_qr": false,
+  "use_eink_for_metadata": true,
+  "fallback_image": "/home/batman/stockimgs/starry-night.jpg"
 }
