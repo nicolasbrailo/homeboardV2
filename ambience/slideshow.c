@@ -32,6 +32,13 @@
 // sem_timedwait returns immediately.
 struct Slideshow {
   uint32_t *fb;
+  // Off-screen buffer: img_render writes here, overlay_cb composes on top,
+  // then we memcpy to fb. Keeps rendering tear-free and gives main() a hook
+  // to draw on top of the image.
+  uint32_t *compose_buf;
+  size_t compose_buf_size;
+  slideshow_overlay_fn overlay_cb;
+  void *overlay_ud;
   struct fb_info fbi;
   atomic_uint transition_time_s;
   enum rotation rotation;
@@ -136,9 +143,12 @@ static void render_fd(struct Slideshow *s, int fd) {
     fprintf(stderr, "jpeg decode failed\n");
     return;
   }
-  img_render(s->fb, s->fbi.width, s->fbi.height, s->fbi.stride, img->pixels, img->width, img->height, s->rotation,
-             INTERP_BILINEAR);
+  img_render(s->compose_buf, s->fbi.width, s->fbi.height, s->fbi.stride, img->pixels, img->width, img->height,
+             s->rotation, INTERP_BILINEAR);
   jpeg_free(img);
+  if (s->overlay_cb)
+    s->overlay_cb(s->overlay_ud, s->compose_buf, s->fbi.width, s->fbi.height, s->fbi.stride, s->rotation);
+  memcpy(s->fb, s->compose_buf, s->compose_buf_size);
 }
 
 // Returns true if stop was requested, false on timeout or next-request.
@@ -223,7 +233,8 @@ static void on_photo_svc_updown(void *ud, bool up) {
 }
 
 struct Slideshow *slideshow_init(sd_bus *bus, uint32_t *fb, const struct fb_info *fbi, uint32_t transition_time_s,
-                                 uint32_t rotation_deg, bool embed_qr, bool use_eink_for_metadata) {
+                                 uint32_t rotation_deg, bool embed_qr, bool use_eink_for_metadata,
+                                 slideshow_overlay_fn overlay_cb, void *overlay_ud) {
   if (!bus || !fb || !fbi || transition_time_s == 0)
     return NULL;
   if (rotation_deg != 0 && rotation_deg != 90 && rotation_deg != 180 && rotation_deg != 270) {
@@ -238,16 +249,27 @@ struct Slideshow *slideshow_init(sd_bus *bus, uint32_t *fb, const struct fb_info
     return NULL;
   s->fb = fb;
   s->fbi = *fbi;
+  s->compose_buf_size = (size_t)fbi->height * fbi->stride;
+  s->compose_buf = malloc(s->compose_buf_size);
+  if (!s->compose_buf) {
+    perror("malloc compose_buf");
+    free(s);
+    return NULL;
+  }
+  s->overlay_cb = overlay_cb;
+  s->overlay_ud = overlay_ud;
   atomic_init(&s->transition_time_s, transition_time_s);
   s->rotation = (enum rotation)rotation_deg;
   if (sem_init(&s->wake_sem, 0, 0) != 0) {
     perror("sem_init");
+    free(s->compose_buf);
     free(s);
     return NULL;
   }
   atomic_init(&s->skip_count, 0);
   if (connect_worker_bus(s) < 0) {
     sem_destroy(&s->wake_sem);
+    free(s->compose_buf);
     free(s);
     return NULL;
   }
@@ -289,6 +311,7 @@ void slideshow_free(struct Slideshow *s) {
   if (s->worker_bus)
     sd_bus_flush_close_unref(s->worker_bus);
   eink_meta_free(s->eink_meta);
+  free(s->compose_buf);
   free(s);
 }
 

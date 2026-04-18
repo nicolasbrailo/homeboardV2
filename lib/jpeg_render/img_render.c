@@ -1,4 +1,3 @@
-#include <stdlib.h>
 #include <string.h>
 
 #include "img_render.h"
@@ -6,17 +5,21 @@
 // Map rotated coordinates back to original image coordinates.
 static inline void rotate_coords(uint32_t sx, uint32_t sy, uint32_t w, uint32_t h, enum rotation rot, uint32_t *ix,
                                  uint32_t *iy) {
+  // For ROT_90/ROT_270 the rotated canvas is h × w (dims swapped), so
+  // sx ranges [0, h) and sy ranges [0, w). The subtract term must use the
+  // original-axis length, not the rotated-axis length, or the uint32_t
+  // underflows for non-square images.
   switch (rot) {
   case ROT_90:
     *ix = sy;
-    *iy = w - 1 - sx;
+    *iy = h - 1 - sx;
     break;
   case ROT_180:
     *ix = w - 1 - sx;
     *iy = h - 1 - sy;
     break;
   case ROT_270:
-    *ix = h - 1 - sy;
+    *ix = w - 1 - sy;
     *iy = sx;
     break;
   default:
@@ -76,24 +79,8 @@ static inline uint32_t pixel_bilinear(const uint8_t *pixels, uint32_t w, uint32_
   return ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
 }
 
-void img_render(uint32_t *fb, uint32_t fb_w, uint32_t fb_h, uint32_t fb_stride, const uint8_t *img_pixels,
+void img_render(uint32_t *dst, uint32_t fb_w, uint32_t fb_h, uint32_t fb_stride, const uint8_t *img_pixels,
                 uint32_t img_w, uint32_t img_h, enum rotation rot, enum interpolation interp) {
-  // Render into a scratch buffer then blit once, to avoid tearing/visible
-  // scanline progression when rendering directly into the scanout fb.
-  static uint8_t *scratch = NULL;
-  static size_t scratch_size = 0;
-  const size_t needed = (size_t)fb_h * fb_stride;
-  if (needed > scratch_size) {
-    free(scratch);
-    scratch = malloc(needed);
-    if (!scratch) {
-      scratch_size = 0;
-      return;
-    }
-    scratch_size = needed;
-  }
-  uint32_t *dst = (uint32_t *)scratch;
-
   // Rotated image dimensions
   uint32_t src_w = (rot == ROT_90 || rot == ROT_270) ? img_h : img_w;
   uint32_t src_h = (rot == ROT_90 || rot == ROT_270) ? img_w : img_h;
@@ -108,7 +95,7 @@ void img_render(uint32_t *fb, uint32_t fb_w, uint32_t fb_h, uint32_t fb_stride, 
   uint32_t off_x = (fb_w - dst_w) / 2;
   uint32_t off_y = (fb_h - dst_h) / 2;
 
-  // Clear scratch to black
+  // Clear dst to black
   for (uint32_t y = 0; y < fb_h; y++) {
     uint32_t *row = (uint32_t *)((uint8_t *)dst + y * fb_stride);
     memset(row, 0, fb_w * 4);
@@ -125,6 +112,4 @@ void img_render(uint32_t *fb, uint32_t fb_w, uint32_t fb_h, uint32_t fb_stride, 
         row[x + off_x] = pixel_nearest(img_pixels, img_w, img_h, fx, fy, rot);
     }
   }
-
-  memcpy(fb, scratch, needed);
 }

@@ -51,7 +51,8 @@ This should verify the full dev cycle works (cross compile, deploy to target). T
 * eink, verify why partial update isn't working
 * Create a global target to install all dbus policies
 * Add announcement overlay (overlay text on top of picture, with timeout)
-* Add remote control with dbus + www
 * Use sides of the display for info, eg weather service
 * Use journal for logging
+* dbus-www bridge should publish metadata for rendered image
+* Show stock image on render/fetch failure
 

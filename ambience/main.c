@@ -39,6 +39,20 @@ static bool on_set_transition_time(void *ud, uint32_t seconds) {
   return slideshow_set_transition_time_s(((struct ambience_ctx *)ud)->slideshow, seconds);
 }
 
+static void on_overlay(void *ud, uint32_t *buf, uint32_t width, uint32_t height, uint32_t stride, enum rotation rot) {
+  (void)ud;
+  (void)rot;
+  const uint32_t box = 100;
+  const uint32_t color = 0x00FF00FF; // magenta (XRGB8888)
+  const uint32_t w = box < width ? box : width;
+  const uint32_t h = box < height ? box : height;
+  for (uint32_t y = 0; y < h; y++) {
+    uint32_t *row = (uint32_t *)((uint8_t *)buf + y * stride);
+    for (uint32_t x = 0; x < w; x++)
+      row[x] = color;
+  }
+}
+
 int main(int argc, char *argv[]) {
   if (argc < 2) {
     fprintf(stderr, "Usage: %s <config.json>\n", argv[0]);
@@ -75,8 +89,8 @@ int main(int argc, char *argv[]) {
     goto end;
   }
 
-  slideshow =
-      slideshow_init(bus, fb, &fbi, cfg.transition_time_s, cfg.rotation, cfg.embed_qr, cfg.use_eink_for_metadata);
+  slideshow = slideshow_init(bus, fb, &fbi, cfg.transition_time_s, cfg.rotation, cfg.embed_qr,
+                             cfg.use_eink_for_metadata, on_overlay, NULL);
   display = display_init(bus, on_display_turned_on, on_display_turned_off, slideshow);
   struct ambience_ctx ctx = {.slideshow = slideshow, .display = display};
   dbus_mgr = ambience_dbus_init(bus, on_slideshow_next, on_slideshow_prev, on_force_on, on_force_off,
