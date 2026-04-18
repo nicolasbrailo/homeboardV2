@@ -8,6 +8,7 @@ typedef void (*ambience_next_cb)(void *);
 typedef void (*ambience_prev_cb)(void *);
 typedef void (*ambience_force_cb)(void *);
 typedef bool (*ambience_set_transition_time_cb)(void *, uint32_t);
+typedef int (*ambience_announce_requested_cb)(void*, uint32_t, const char*);
 
 struct AmbienceDbus;
 
@@ -16,7 +17,9 @@ struct AmbienceDbus;
 // dispatch loop and share the same `ud`.
 struct AmbienceDbus *ambience_dbus_init(sd_bus *bus, ambience_next_cb on_next, ambience_prev_cb on_prev,
                                         ambience_force_cb on_force_on, ambience_force_cb on_force_off,
-                                        ambience_set_transition_time_cb on_set_transition_time, void *ud);
+                                        ambience_set_transition_time_cb on_set_transition_time,
+                                        ambience_announce_requested_cb on_announce_requested_cb,
+                                        void *ud);
 void ambience_dbus_free(struct AmbienceDbus *d);
 
 // Broadcast a DisplayingPhoto(s) signal on io.homeboard.Ambience1. Safe to

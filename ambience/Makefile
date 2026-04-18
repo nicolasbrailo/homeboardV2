@@ -33,6 +33,8 @@ tgt-force-off:
 	$(SSH) 'busctl --system call io.homeboard.Ambience /io/homeboard/Ambience io.homeboard.Ambience1 ForceSlideshowOff'
 tgt-set-transition-time:
 	$(SSH) 'busctl --system call io.homeboard.Ambience /io/homeboard/Ambience io.homeboard.Ambience1 SetTransitionTimeSecs u 5'
+announce:
+	$(SSH) 'busctl --system call io.homeboard.Ambience /io/homeboard/Ambience io.homeboard.Ambience1 Announce us 10 "HOLA MUNDO"'
 
 install_sysroot_deps:
 	@# Jpeg render deps
