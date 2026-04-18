@@ -19,7 +19,9 @@
 struct rc_dbus {
   sd_bus *bus;
   sd_bus_slot *occupancy_slot;
+  sd_bus_slot *displayed_photo_slot;
   rc_dbus_occupancy_cb on_occupancy;
+  rc_dbus_displayed_photo_cb on_displayed_photo;
   void *ud;
 };
 
@@ -37,11 +39,26 @@ static int on_state_changed(sd_bus_message *m, void *userdata, sd_bus_error *err
   return 0;
 }
 
-struct rc_dbus *rc_dbus_init(rc_dbus_occupancy_cb on_occupancy, void *ud) {
+static int on_displaying_photo(sd_bus_message *m, void *userdata, sd_bus_error *err) {
+  (void)err;
+  struct rc_dbus *d = userdata;
+  const char *meta = NULL;
+  int r = sd_bus_message_read(m, "s", &meta);
+  if (r < 0) {
+    fprintf(stderr, "DisplayingPhoto: parse failed: %s\n", strerror(-r));
+    return 0;
+  }
+  d->on_displayed_photo(meta ? meta : "", d->ud);
+  return 0;
+}
+
+struct rc_dbus *rc_dbus_init(rc_dbus_occupancy_cb on_occupancy, rc_dbus_displayed_photo_cb on_displayed_photo,
+                             void *ud) {
   struct rc_dbus *d = calloc(1, sizeof(*d));
   if (!d)
     return NULL;
   d->on_occupancy = on_occupancy;
+  d->on_displayed_photo = on_displayed_photo;
   d->ud = ud;
 
   int r = sd_bus_open_system(&d->bus);
@@ -59,7 +76,22 @@ struct rc_dbus *rc_dbus_init(rc_dbus_occupancy_cb on_occupancy, void *ud) {
     return NULL;
   }
 
-  printf("D-Bus client ready; listening for %s StateChanged\n", OCCUPANCY_SERVICE);
+  // NULL sender: DisplayingPhoto is emitted from the ambience slideshow's
+  // worker-thread private bus, whose unique name does NOT own
+  // io.homeboard.Ambience (the main dispatch bus does). dbus-daemon resolves
+  // a well-known sender in a match rule to the current owner's unique name,
+  // so passing AMBIENCE_SERVICE here would filter out the worker's signals.
+  // We rely on path+interface+member to identify the signal instead.
+  r = sd_bus_match_signal(d->bus, &d->displayed_photo_slot, NULL, AMBIENCE_PATH, AMBIENCE_INTERFACE, "DisplayingPhoto",
+                          on_displaying_photo, d);
+  if (r < 0) {
+    fprintf(stderr, "sd_bus_match_signal(DisplayingPhoto): %s\n", strerror(-r));
+    rc_dbus_free(d);
+    return NULL;
+  }
+
+  printf("D-Bus client ready; listening for %s StateChanged and %s DisplayingPhoto\n", OCCUPANCY_SERVICE,
+         AMBIENCE_SERVICE);
   return d;
 }
 
@@ -68,6 +100,8 @@ void rc_dbus_free(struct rc_dbus *d) {
     return;
   if (d->occupancy_slot)
     sd_bus_slot_unref(d->occupancy_slot);
+  if (d->displayed_photo_slot)
+    sd_bus_slot_unref(d->displayed_photo_slot);
   if (d->bus)
     sd_bus_flush_close_unref(d->bus);
   free(d);

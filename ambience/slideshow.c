@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "slideshow.h"
+#include "dbus.h"
 #include "dbus_helpers.h"
 #include "eink_meta.h"
 
@@ -186,6 +187,7 @@ static void *worker_main(void *ud) {
       render_meta(s, meta);
       render_fd(s, fd);
       close(fd);
+      ambience_dbus_emit_displaying_photo(s->worker_bus, meta);
       free(meta);
     }
     if (wait_or_stop(s, atomic_load(&s->transition_time_s)))

@@ -19,6 +19,20 @@ struct AmbienceDbus *ambience_dbus_init(sd_bus *bus, ambience_next_cb on_next, a
                                         ambience_set_transition_time_cb on_set_transition_time, void *ud);
 void ambience_dbus_free(struct AmbienceDbus *d);
 
+// Broadcast a DisplayingPhoto(s) signal on io.homeboard.Ambience1. Safe to
+// call from any thread as long as `bus` is used only by the caller's thread.
+// Pass the slideshow worker's private bus when emitting from the worker.
+//
+// Subscriber note: this signal is emitted from the worker's private
+// connection, whose unique name is NOT the owner of io.homeboard.Ambience
+// (that well-known name is held by the main dispatch bus). dbus-daemon
+// resolves a well-known sender in a match rule to the current owner's unique
+// name at install time, so a match that filters on sender=io.homeboard.Ambience
+// will silently drop these signals. Subscribers must pass NULL as the sender
+// to sd_bus_match_signal (or equivalent) and rely on path+interface+member
+// to identify the signal.
+int ambience_dbus_emit_displaying_photo(sd_bus *bus, const char *meta);
+
 // Process pending messages and block until new activity (or a signal).
 // Returns negative on error, 0 otherwise.
 int ambience_dbus_run_once(struct AmbienceDbus *d);

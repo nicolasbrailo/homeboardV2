@@ -17,6 +17,7 @@ If the broker or a web UI in front of it is compromised, the blast radius on the
 - Connects to an MQTT broker as a client, with Last-Will-and-Testament set to `<prefix>state/bridge` = `"offline"` (retained).
 - Subscribes to `<prefix>cmd/#`. Each known topic suffix maps to one D-Bus method call.
 - Listens for `io.homeboard.Occupancy1.StateChanged` on the system bus and republishes it as retained JSON on `<prefix>state/occupancy`.
+- Listens for `io.homeboard.Ambience1.DisplayingPhoto` and republishes the raw metadata string as a retained message on `<prefix>state/displayed_photo`.
 - Auto-reconnects to both the broker and (implicitly) D-Bus on failure.
 - Publishes `"online"` retained to `<prefix>state/bridge` on successful connect and `"offline"` on graceful shutdown.
 
@@ -40,7 +41,7 @@ No worker threads. No `mosquitto_loop_start`. We own the loop explicitly because
 | `main.c` | Entry point, event loop, command dispatch table, payload parsers |
 | `config.c/h` | JSON config loader (json-c), defaults, `topic_prefix` validation |
 | `mqtt.c/h` | libmosquitto wrapper: connect, LWT, subscribe/publish, non-blocking loop primitives |
-| `dbus_client.c/h` | sd-bus client: method-call helpers for Ambience/PhotoProvider, signal subscriber for Occupancy |
+| `dbus_client.c/h` | sd-bus client: method-call helpers for Ambience/PhotoProvider, signal subscribers for Occupancy and Ambience |
 | `config.json` | Broker host/port, credentials, keepalive, topic prefix |
 
 ## MQTT interface
@@ -67,6 +68,7 @@ Unknown topics and malformed payloads are logged and dropped. Payloads have hard
 |-------|---------|----------|
 | `state/bridge` | `"online"` / `"offline"` | yes (LWT sets `offline` on ungraceful disconnect) |
 | `state/occupancy` | JSON `{"occupied":bool,"distance_cm":uint,"ts":unix_seconds}` | yes — late-joining clients get current state |
+| `state/displayed_photo` | raw metadata string from `photo-provider` (opaque, not parsed) | yes — late-joining clients see the currently-displayed photo |
 
 All publishes are QoS 0.
 
@@ -76,7 +78,7 @@ No name is owned on the bus, so no `.conf` policy file is needed for this servic
 
 The bridge talks to three services:
 
-- `io.homeboard.Ambience` @ `/io/homeboard/Ambience` (interface `io.homeboard.Ambience1`) — method calls only
+- `io.homeboard.Ambience` @ `/io/homeboard/Ambience` (interface `io.homeboard.Ambience1`) — method calls, plus signal subscription (`DisplayingPhoto s`). The subscription uses `NULL` sender because Ambience emits this signal from a worker-thread bus whose unique name does not own the well-known name; see the Ambience README for details.
 - `io.homeboard.PhotoProvider` @ `/io/homeboard/PhotoProvider` (interface `io.homeboard.PhotoProvider1`) — method calls only
 - `io.homeboard.Occupancy` @ `/io/homeboard/Occupancy` (interface `io.homeboard.Occupancy1`) — signal subscription (`StateChanged bu`)
 

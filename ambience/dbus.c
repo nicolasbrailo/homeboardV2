@@ -69,8 +69,18 @@ static const sd_bus_vtable g_vtable[] = {
     SD_BUS_METHOD("ForceSlideshowOn", "", "", method_force_on, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("ForceSlideshowOff", "", "", method_force_off, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("SetTransitionTimeSecs", "u", "", method_set_transition_time, SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_SIGNAL("DisplayingPhoto", "s", 0),
     SD_BUS_VTABLE_END,
 };
+
+int ambience_dbus_emit_displaying_photo(sd_bus *bus, const char *meta) {
+  if (!bus)
+    return -EINVAL;
+  int r = sd_bus_emit_signal(bus, DBUS_PATH, DBUS_INTERFACE, "DisplayingPhoto", "s", meta ? meta : "");
+  if (r < 0)
+    fprintf(stderr, "emit DisplayingPhoto: %s\n", strerror(-r));
+  return r;
+}
 
 struct AmbienceDbus *ambience_dbus_init(sd_bus *bus, ambience_next_cb on_next, ambience_prev_cb on_prev,
                                         ambience_force_cb on_force_on, ambience_force_cb on_force_off,

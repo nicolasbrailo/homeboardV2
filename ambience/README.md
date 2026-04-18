@@ -18,6 +18,9 @@ D-Bus interface for manual control.
   `ForceSlideshowOn()` / `ForceSlideshowOff()` to override the occupancy
   gate until the next real occupancy report arrives.
 - Transition time between pictures can be configured over dbus with `SetTransitionTimeSecs`
+- Emits a `DisplayingPhoto(s)` signal on the same interface every time a new
+  photo is rendered; the payload is the opaque metadata string supplied by
+  `photo-provider`.
 
 ## Dependencies
 
@@ -94,12 +97,27 @@ Methods (all take no arguments, return nothing):
 | `ForceSlideshowOn()` | Turn the display on and start the slideshow as if `occupied=true` had been reported. Cleared by the next real occupancy report. |
 | `ForceSlideshowOff()` | Turn the display off and stop the slideshow. Latched: subsequent `occupied=true` reports are ignored until a real `occupied=false` report (or the occupancy service dropping out) releases it. After release, normal behavior resumes — the next `occupied=true` turns the display back on. `ForceSlideshowOn()` also releases the latch. |
 
+Signals:
+
+| Signal | Signature | When |
+|---|---|---|
+| `DisplayingPhoto` | `s` (metadata string) | Emitted from the slideshow worker after each successful render, carrying the metadata blob `photo-provider` returned alongside the image. |
+
+Subscriber caveat: `DisplayingPhoto` is emitted from the slideshow worker's
+private bus connection, whose unique name does **not** own
+`io.homeboard.Ambience` (the main dispatch bus does). dbus-daemon resolves a
+well-known sender in a match rule to the current owner's unique name at
+install time, so a match filtering on `sender=io.homeboard.Ambience` will
+silently drop these signals. Subscribers must pass `NULL` (no sender filter)
+to `sd_bus_match_signal` and identify the signal by path + interface + member.
+
 Shell invocation:
 
 ```sh
 busctl --system call io.homeboard.Ambience /io/homeboard/Ambience io.homeboard.Ambience1 Next
 busctl --system call io.homeboard.Ambience /io/homeboard/Ambience io.homeboard.Ambience1 ForceSlideshowOn
 busctl --system call io.homeboard.Ambience /io/homeboard/Ambience io.homeboard.Ambience1 ForceSlideshowOff
+busctl --system monitor io.homeboard.Ambience     # watch DisplayingPhoto live
 ```
 
 The policy file `io.homeboard.Ambience.conf` grants `own` to the running user
