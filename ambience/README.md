@@ -21,6 +21,9 @@ D-Bus interface for manual control.
 - Emits a `DisplayingPhoto(s)` signal on the same interface every time a new
   photo is rendered; the payload is the opaque metadata string supplied by
   `photo-provider`.
+- Emits a `SlideshowActive(b)` signal when the screen transitions on/off
+  (occupancy-driven or forced); `true` means the slideshow is now running and
+  the display is on, `false` means it has stopped.
 
 ## Dependencies
 
@@ -102,6 +105,7 @@ Signals:
 | Signal | Signature | When |
 |---|---|---|
 | `DisplayingPhoto` | `s` (metadata string) | Emitted from the slideshow worker after each successful render, carrying the metadata blob `photo-provider` returned alongside the image. |
+| `SlideshowActive` | `b` | Emitted from the main dispatch thread on screen on/off transitions. `true` when the display is turned on and the slideshow starts; `false` when it is turned off and the slideshow stops. No signal is emitted on service shutdown. |
 
 Subscriber caveat: `DisplayingPhoto` is emitted from the slideshow worker's
 private bus connection, whose unique name does **not** own
@@ -110,6 +114,9 @@ well-known sender in a match rule to the current owner's unique name at
 install time, so a match filtering on `sender=io.homeboard.Ambience` will
 silently drop these signals. Subscribers must pass `NULL` (no sender filter)
 to `sd_bus_match_signal` and identify the signal by path + interface + member.
+`SlideshowActive` is emitted from the name-owning connection and is not
+subject to this quirk, but subscribers are encouraged to use `NULL` sender
+uniformly for both signals.
 
 Shell invocation:
 

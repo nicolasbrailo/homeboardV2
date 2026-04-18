@@ -19,13 +19,22 @@ static void sig_handler(int sig) {
 }
 
 struct ambience_ctx {
+  sd_bus *bus;
   struct Slideshow *slideshow;
   struct Display *display;
 };
 
-static void on_display_turned_on(void *ud) { slideshow_start((struct Slideshow *)ud); }
+static void on_display_turned_on(void *ud) {
+  struct ambience_ctx *ctx = ud;
+  slideshow_start(ctx->slideshow);
+  ambience_dbus_emit_slideshow_active(ctx->bus, true);
+}
 
-static void on_display_turned_off(void *ud) { slideshow_stop((struct Slideshow *)ud); }
+static void on_display_turned_off(void *ud) {
+  struct ambience_ctx *ctx = ud;
+  slideshow_stop(ctx->slideshow);
+  ambience_dbus_emit_slideshow_active(ctx->bus, false);
+}
 
 static void on_slideshow_next(void *ud) { slideshow_next(((struct ambience_ctx *)ud)->slideshow); }
 
@@ -89,10 +98,12 @@ int main(int argc, char *argv[]) {
     goto end;
   }
 
+  struct ambience_ctx ctx = {.bus = bus};
   slideshow = slideshow_init(bus, fb, &fbi, cfg.transition_time_s, cfg.rotation, cfg.embed_qr,
                              cfg.use_eink_for_metadata, on_overlay, NULL);
-  display = display_init(bus, on_display_turned_on, on_display_turned_off, slideshow);
-  struct ambience_ctx ctx = {.slideshow = slideshow, .display = display};
+  ctx.slideshow = slideshow;
+  display = display_init(bus, on_display_turned_on, on_display_turned_off, &ctx);
+  ctx.display = display;
   dbus_mgr = ambience_dbus_init(bus, on_slideshow_next, on_slideshow_prev, on_force_on, on_force_off,
                                 on_set_transition_time, &ctx);
   if (!slideshow || !display || !dbus_mgr) {

@@ -70,6 +70,7 @@ static const sd_bus_vtable g_vtable[] = {
     SD_BUS_METHOD("ForceSlideshowOff", "", "", method_force_off, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("SetTransitionTimeSecs", "u", "", method_set_transition_time, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_SIGNAL("DisplayingPhoto", "s", 0),
+    SD_BUS_SIGNAL("SlideshowActive", "b", 0),
     SD_BUS_VTABLE_END,
 };
 
@@ -79,6 +80,15 @@ int ambience_dbus_emit_displaying_photo(sd_bus *bus, const char *meta) {
   int r = sd_bus_emit_signal(bus, DBUS_PATH, DBUS_INTERFACE, "DisplayingPhoto", "s", meta ? meta : "");
   if (r < 0)
     fprintf(stderr, "emit DisplayingPhoto: %s\n", strerror(-r));
+  return r;
+}
+
+int ambience_dbus_emit_slideshow_active(sd_bus *bus, bool active) {
+  if (!bus)
+    return -EINVAL;
+  int r = sd_bus_emit_signal(bus, DBUS_PATH, DBUS_INTERFACE, "SlideshowActive", "b", (int)(active ? 1 : 0));
+  if (r < 0)
+    fprintf(stderr, "emit SlideshowActive: %s\n", strerror(-r));
   return r;
 }
 

@@ -18,6 +18,7 @@ If the broker or a web UI in front of it is compromised, the blast radius on the
 - Subscribes to `<prefix>cmd/#`. Each known topic suffix maps to one D-Bus method call.
 - Listens for `io.homeboard.Occupancy1.StateChanged` on the system bus and republishes it as retained JSON on `<prefix>state/occupancy`.
 - Listens for `io.homeboard.Ambience1.DisplayingPhoto` and republishes the raw metadata string as a retained message on `<prefix>state/displayed_photo`.
+- Listens for `io.homeboard.Ambience1.SlideshowActive` and republishes `"true"` / `"false"` as a retained message on `<prefix>state/slideshow_active`.
 - Auto-reconnects to both the broker and (implicitly) D-Bus on failure.
 - Publishes `"online"` retained to `<prefix>state/bridge` on successful connect and `"offline"` on graceful shutdown.
 
@@ -69,6 +70,7 @@ Unknown topics and malformed payloads are logged and dropped. Payloads have hard
 | `state/bridge` | `"online"` / `"offline"` | yes (LWT sets `offline` on ungraceful disconnect) |
 | `state/occupancy` | JSON `{"occupied":bool,"distance_cm":uint,"ts":unix_seconds}` | yes — late-joining clients get current state |
 | `state/displayed_photo` | raw metadata string from `photo-provider` (opaque, not parsed) | yes — late-joining clients see the currently-displayed photo |
+| `state/slideshow_active` | `"true"` or `"false"` | yes — reflects whether the ambience screen is currently on and the slideshow is running |
 
 All publishes are QoS 0.
 
@@ -78,7 +80,7 @@ No name is owned on the bus, so no `.conf` policy file is needed for this servic
 
 The bridge talks to three services:
 
-- `io.homeboard.Ambience` @ `/io/homeboard/Ambience` (interface `io.homeboard.Ambience1`) — method calls, plus signal subscription (`DisplayingPhoto s`). The subscription uses `NULL` sender because Ambience emits this signal from a worker-thread bus whose unique name does not own the well-known name; see the Ambience README for details.
+- `io.homeboard.Ambience` @ `/io/homeboard/Ambience` (interface `io.homeboard.Ambience1`) — method calls, plus signal subscriptions (`DisplayingPhoto s`, `SlideshowActive b`). Both subscriptions use `NULL` sender: `DisplayingPhoto` requires it (worker-thread bus doesn't own the well-known name — see the Ambience README), and `SlideshowActive` uses it for uniformity so the rule shape is robust if the emit side ever moves.
 - `io.homeboard.PhotoProvider` @ `/io/homeboard/PhotoProvider` (interface `io.homeboard.PhotoProvider1`) — method calls only
 - `io.homeboard.Occupancy` @ `/io/homeboard/Occupancy` (interface `io.homeboard.Occupancy1`) — signal subscription (`StateChanged bu`)
 

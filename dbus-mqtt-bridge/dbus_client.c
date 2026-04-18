@@ -20,8 +20,10 @@ struct rc_dbus {
   sd_bus *bus;
   sd_bus_slot *occupancy_slot;
   sd_bus_slot *displayed_photo_slot;
+  sd_bus_slot *slideshow_active_slot;
   rc_dbus_occupancy_cb on_occupancy;
   rc_dbus_displayed_photo_cb on_displayed_photo;
+  rc_dbus_slideshow_active_cb on_slideshow_active;
   void *ud;
 };
 
@@ -52,13 +54,27 @@ static int on_displaying_photo(sd_bus_message *m, void *userdata, sd_bus_error *
   return 0;
 }
 
+static int on_slideshow_active_signal(sd_bus_message *m, void *userdata, sd_bus_error *err) {
+  (void)err;
+  struct rc_dbus *d = userdata;
+  int active = 0;
+  int r = sd_bus_message_read(m, "b", &active);
+  if (r < 0) {
+    fprintf(stderr, "SlideshowActive: parse failed: %s\n", strerror(-r));
+    return 0;
+  }
+  d->on_slideshow_active(active != 0, d->ud);
+  return 0;
+}
+
 struct rc_dbus *rc_dbus_init(rc_dbus_occupancy_cb on_occupancy, rc_dbus_displayed_photo_cb on_displayed_photo,
-                             void *ud) {
+                             rc_dbus_slideshow_active_cb on_slideshow_active, void *ud) {
   struct rc_dbus *d = calloc(1, sizeof(*d));
   if (!d)
     return NULL;
   d->on_occupancy = on_occupancy;
   d->on_displayed_photo = on_displayed_photo;
+  d->on_slideshow_active = on_slideshow_active;
   d->ud = ud;
 
   int r = sd_bus_open_system(&d->bus);
@@ -90,8 +106,20 @@ struct rc_dbus *rc_dbus_init(rc_dbus_occupancy_cb on_occupancy, rc_dbus_displaye
     return NULL;
   }
 
-  printf("D-Bus client ready; listening for %s StateChanged and %s DisplayingPhoto\n", OCCUPANCY_SERVICE,
-         AMBIENCE_SERVICE);
+  // NULL sender for uniformity with DisplayingPhoto. SlideshowActive is
+  // emitted from Ambience's main (name-owning) bus, so a well-known sender
+  // filter would work here too — but keeping both subscriptions on the same
+  // rule shape avoids a subtle footgun if the emit side ever moves.
+  r = sd_bus_match_signal(d->bus, &d->slideshow_active_slot, NULL, AMBIENCE_PATH, AMBIENCE_INTERFACE, "SlideshowActive",
+                          on_slideshow_active_signal, d);
+  if (r < 0) {
+    fprintf(stderr, "sd_bus_match_signal(SlideshowActive): %s\n", strerror(-r));
+    rc_dbus_free(d);
+    return NULL;
+  }
+
+  printf("D-Bus client ready; listening for %s StateChanged and %s DisplayingPhoto, SlideshowActive\n",
+         OCCUPANCY_SERVICE, AMBIENCE_SERVICE);
   return d;
 }
 
@@ -102,6 +130,8 @@ void rc_dbus_free(struct rc_dbus *d) {
     sd_bus_slot_unref(d->occupancy_slot);
   if (d->displayed_photo_slot)
     sd_bus_slot_unref(d->displayed_photo_slot);
+  if (d->slideshow_active_slot)
+    sd_bus_slot_unref(d->slideshow_active_slot);
   if (d->bus)
     sd_bus_flush_close_unref(d->bus);
   free(d);

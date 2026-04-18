@@ -8,8 +8,10 @@ struct rc_dbus;
 
 typedef void (*rc_dbus_occupancy_cb)(bool occupied, uint32_t distance_cm, void *ud);
 typedef void (*rc_dbus_displayed_photo_cb)(const char *meta, void *ud);
+typedef void (*rc_dbus_slideshow_active_cb)(bool active, void *ud);
 
-struct rc_dbus *rc_dbus_init(rc_dbus_occupancy_cb on_occupancy, rc_dbus_displayed_photo_cb on_displayed_photo, void *ud);
+struct rc_dbus *rc_dbus_init(rc_dbus_occupancy_cb on_occupancy, rc_dbus_displayed_photo_cb on_displayed_photo,
+                             rc_dbus_slideshow_active_cb on_slideshow_active, void *ud);
 void rc_dbus_free(struct rc_dbus *d);
 
 sd_bus *rc_dbus_bus(struct rc_dbus *d);

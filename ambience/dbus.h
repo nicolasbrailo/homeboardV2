@@ -33,6 +33,12 @@ void ambience_dbus_free(struct AmbienceDbus *d);
 // to identify the signal.
 int ambience_dbus_emit_displaying_photo(sd_bus *bus, const char *meta);
 
+// Broadcast a SlideshowActive(b) signal on io.homeboard.Ambience1. Emitted
+// on the main dispatch bus (the connection that owns io.homeboard.Ambience),
+// so sender-based match filters work here — but subscribers that already
+// use NULL sender for DisplayingPhoto can keep doing so uniformly.
+int ambience_dbus_emit_slideshow_active(sd_bus *bus, bool active);
+
 // Process pending messages and block until new activity (or a signal).
 // Returns negative on error, 0 otherwise.
 int ambience_dbus_run_once(struct AmbienceDbus *d);

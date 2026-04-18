@@ -40,6 +40,12 @@ static void on_displayed_photo_changed(const char *meta, void *ud) {
   rc_mqtt_publish(ctx->mqtt, "state/displayed_photo", meta, strlen(meta), true);
 }
 
+static void on_slideshow_active_changed(bool active, void *ud) {
+  struct app_ctx *ctx = ud;
+  const char *payload = active ? "true" : "false";
+  rc_mqtt_publish(ctx->mqtt, "state/slideshow_active", payload, strlen(payload), true);
+}
+
 static int parse_bool(const char *p, size_t n, bool *out) {
   if (n == 1 && (p[0] == '0' || p[0] == '1')) {
     *out = (p[0] == '1');
@@ -141,7 +147,7 @@ int main(int argc, char *argv[]) {
   signal(SIGINT, sig_handler);
 
   struct app_ctx ctx = {0};
-  ctx.dbus = rc_dbus_init(on_occupancy, on_displayed_photo_changed, &ctx);
+  ctx.dbus = rc_dbus_init(on_occupancy, on_displayed_photo_changed, on_slideshow_active_changed, &ctx);
   if (!ctx.dbus)
     return 1;
   ctx.mqtt = rc_mqtt_init(&cfg, on_cmd, &ctx);
